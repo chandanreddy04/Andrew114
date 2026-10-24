@@ -82,6 +82,11 @@ export default function AppTabs() {
       {/* Real screens, but not shown as tabs. */}
       <Tabs.Screen name="check-in" options={{ href: null }} />
       <Tabs.Screen name="history" options={{ href: null }} />
+      {/* Edit Profile fills the screen, like the design (no tab bar). */}
+      <Tabs.Screen
+        name="edit-profile"
+        options={{ href: null, tabBarStyle: { display: 'none' } }}
+      />
     </Tabs>
   );
 }

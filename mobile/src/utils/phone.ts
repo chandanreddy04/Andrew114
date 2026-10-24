@@ -13,3 +13,9 @@ export function normalizePhone(input: string) {
 export function isValidPhone(phone: string) {
   return /^\+[1-9]\d{7,14}$/.test(phone);
 }
+
+// For showing: "+15551234567" -> "(555) 123-4567"; other countries stay as they are.
+export function formatPhone(phone: string) {
+  const us = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(phone);
+  return us ? `(${us[1]}) ${us[2]}-${us[3]}` : phone;
+}
