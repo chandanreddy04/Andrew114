@@ -25,6 +25,8 @@ from app.errors import bugsnag_enabled, configure_bugsnag
 from app.routers import auth, check_ins, client_errors, contacts, history, me, share, sos
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+# httpx logs every request URL, which includes the Twilio account id.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 settings = get_settings()
 configure_bugsnag()

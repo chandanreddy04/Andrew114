@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
+import { send as reportProblem } from '@/services/error-reporting';
 import { getSosLocation } from '@/services/location';
 import { scheduleCheckInNotifications, setUpNotifications } from '@/services/notifications';
 import {
@@ -68,6 +69,7 @@ export type CheckIn = {
   locationShared: boolean; // the server has your last known location
   photoUri: string | null; // the outfit photo on this phone
   photoShared: boolean; // the server has the photo
+  photoProblem: string | null; // why the photo couldn't be sent (tap Retry)
 };
 
 // What the Start Session screen sends. Left out = unchanged.
@@ -102,6 +104,8 @@ type SafetyStore = {
 
   checkIn: CheckIn | null;
   startCheckIn: (returnBy: Date, choices?: SessionChoices) => Promise<boolean>;
+  // Try sending the outfit photo again after it failed.
+  retryPhoto: () => void;
   // Says whether the server got it in time, or your Circle was already alerted.
   endCheckIn: () => Promise<EndCheckInResult>;
 
@@ -154,6 +158,7 @@ async function loadCheckIn(): Promise<CheckIn | null> {
     locationShared: parsed.locationShared ?? false,
     photoUri: parsed.photoUri ?? null,
     photoShared: parsed.photoShared ?? false,
+    photoProblem: parsed.photoProblem ?? null,
   };
   return isNaN(checkIn.returnBy.getTime()) ? null : checkIn;
 }
@@ -317,6 +322,26 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
     );
   }
 
+  // Send the outfit photo. A failure is shown on Home (with Retry) and
+  // reported, never silently left as "uploading".
+  async function sendPhoto(id: string, uri: string) {
+    setCheckIn((current) =>
+      current?.server?.id === id ? { ...current, photoProblem: null } : current,
+    );
+    let problem: string | null;
+    try {
+      problem = await uploadCheckInPhoto(id, uri);
+    } catch (error) {
+      problem = error instanceof Error ? error.message : String(error);
+    }
+    if (problem) reportProblem(new Error(`Photo upload failed: ${problem} [${uri.split(':')[0]}]`));
+    setCheckIn((current) =>
+      current?.server?.id === id
+        ? { ...current, photoShared: !problem, photoProblem: problem }
+        : current,
+    );
+  }
+
   // While a session is going, refresh the location when you open the app.
   const shareLocationOn = checkIn?.shareLocation ?? false;
   const activeId = checkIn?.server?.status === 'active' ? checkIn.server.id : null;
@@ -395,18 +420,13 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
         locationShared: sameSession && shareLocation ? (previous?.locationShared ?? false) : false,
         photoUri,
         photoShared: sameSession && choices.photo === undefined ? (previous?.photoShared ?? false) : false,
+        photoProblem: sameSession && choices.photo === undefined ? (previous?.photoProblem ?? null) : null,
       });
 
       if (id) {
         // Photo and location go up in the background, so starting is instant.
         if (choices.photo) {
-          uploadCheckInPhoto(id, choices.photo).then((problem) => {
-            if (problem) console.warn('Could not upload photo:', problem);
-            else
-              setCheckIn((current) =>
-                current?.server?.id === id ? { ...current, photoShared: true } : current,
-              );
-          });
+          sendPhoto(id, choices.photo);
         } else if (choices.photo === null && previous?.photoShared && sameSession) {
           deleteCheckInPhoto(id).catch(() => {});
         }
@@ -415,6 +435,10 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
         }
       }
       return id !== null;
+    },
+    retryPhoto: () => {
+      const id = checkIn?.server?.id;
+      if (id && checkIn?.photoUri) sendPhoto(id, checkIn.photoUri);
     },
     endCheckIn: async () => {
       const id = checkIn?.server?.id;

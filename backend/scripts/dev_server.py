@@ -85,6 +85,7 @@ upgrade_database()
 # Alembic's logging settings turn routine messages off; turn them back on so
 # texts and crash reports are shown.
 logging.getLogger().setLevel(logging.INFO)
+logging.getLogger("httpx").setLevel(logging.WARNING)  # its URLs include the Twilio id
 
 # Also keep the log in a file (backend/dev-server.log), e.g. to read crash
 # reports from the app after the window was closed.

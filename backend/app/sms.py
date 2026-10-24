@@ -64,11 +64,13 @@ def send_sms(to: str, body: str, *, use_trial_template: bool = True) -> SmsResul
     except httpx.HTTPError as error:
         return SmsResult(ok=False, error=f"Network error: {error}")
     if response.is_success:
+        log.info("SMS to ...%s sent via Twilio", to[-4:])
         return SmsResult(ok=True)
     try:
         message = response.json().get("message")
     except ValueError:
         message = None
+    log.warning("SMS to ...%s failed: %s", to[-4:], message or response.status_code)
     return SmsResult(ok=False, error=message or f"HTTP {response.status_code}")
 
 

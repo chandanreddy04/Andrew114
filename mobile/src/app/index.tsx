@@ -44,7 +44,7 @@ function extendedReturnTime(returnBy: Date, minutes: number) {
  * Both show a Safety Tip at the bottom.
  */
 export default function HomeScreen() {
-  const { checkIn, startCheckIn, endCheckIn, contacts, serverConnected, profileName } =
+  const { checkIn, startCheckIn, endCheckIn, retryPhoto, contacts, serverConnected, profileName } =
     useSafety();
   const theme = useTheme();
 
@@ -251,11 +251,24 @@ export default function HomeScreen() {
             {checkIn.photoUri && (
               <StatusChip
                 icon="camera-outline"
-                label={checkIn.photoShared ? 'Photo shared' : 'Photo: uploading'}
+                label={
+                  checkIn.photoShared
+                    ? 'Photo shared'
+                    : checkIn.photoProblem
+                      ? 'Photo not sent'
+                      : 'Photo: sending…'
+                }
                 ok={checkIn.photoShared}
               />
             )}
           </View>
+          {checkIn.photoProblem && (
+            <Pressable onPress={retryPhoto} accessibilityRole="button">
+              <ThemedText type="small" style={{ color: Brand.red }}>
+                The outfit photo couldn&apos;t be sent ({checkIn.photoProblem}). Tap to retry.
+              </ThemedText>
+            </Pressable>
+          )}
 
           <View style={styles.safeButton}>
             <BigButton label="I'm Safe" onPress={handleImSafe} />
