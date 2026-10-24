@@ -22,9 +22,14 @@
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.READ_CONTACTS"
+        "android.permission.READ_CONTACTS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS"
       ],
       "blockedPermissions": [
+        "android.permission.WRITE_CONTACTS",
         "android.permission.WRITE_CONTACTS"
       ]
     },
@@ -62,11 +67,17 @@
       "reactCompiler": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "c1832386-220e-4ae1-aabd-42a389e6d1dc"
+      }
     },
     "owner": "chandanreddy04",
     "runtimeVersion": {
       "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c1832386-220e-4ae1-aabd-42a389e6d1dc"
     }
   }
 }

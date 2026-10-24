@@ -8,7 +8,10 @@
       "developmentClient": true,
       "distribution": "internal",
       "environment": "development",
-      "channel": "development"
+      "channel": "development",
+      "env": {
+        "ALLOW_HTTP_API": "1"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -16,7 +19,10 @@
       "android": {
         "buildType": "apk"
       },
-      "channel": "preview"
+      "channel": "preview",
+      "env": {
+        "ALLOW_HTTP_API": "1"
+      }
     },
     "production": {
       "environment": "production",

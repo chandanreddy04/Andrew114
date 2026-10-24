@@ -5,7 +5,7 @@ backend). See .env.example for every option and what it's for.
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -57,6 +57,16 @@ class Settings(BaseSettings):
 
     # Test-only: run Celery tasks in-process instead of on a worker.
     celery_always_eager: bool = Field(default=False)
+
+    @field_validator("database_url")
+    @classmethod
+    def _use_psycopg(cls, url: str) -> str:
+        # Hosts (Render, Railway, Heroku…) hand out "postgres://…" URLs;
+        # SQLAlchemy needs to be told to use the psycopg driver.
+        for prefix in ("postgres://", "postgresql://"):
+            if url.startswith(prefix):
+                return "postgresql+psycopg://" + url[len(prefix) :]
+        return url
 
     @property
     def is_production(self) -> bool:

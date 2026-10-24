@@ -1,0 +1,86 @@
+# Render Blueprint: deploys the whole backend from this repo.
+#   Render dashboard -> New -> Blueprint -> pick this repo -> fill in the
+#   Twilio / Bugsnag values it asks for -> Apply.
+# See docs/DEPLOYMENT.md for costs and the free-plan trade-offs.
+
+envVarGroups:
+  - name: reached-settings
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SMS_BACKEND
+        value: twilio
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+      # Keep while Twilio is on a trial account; delete after upgrading.
+      - key: TWILIO_TRIAL_TEMPLATE
+        value: sms_account_alerts
+      - key: TWILIO_VERIFY_SERVICE_SID
+        sync: false
+      # Test login until real login texts can be sent. Remove before launch.
+      - key: TEST_PHONE_NUMBERS
+        value: "+15550001111=123456"
+      - key: BUGSNAG_API_KEY
+        sync: false
+
+services:
+  # The API the app talks to (HTTPS is provided by Render).
+  - type: web
+    name: reached-api
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - fromGroup: reached-settings
+      - key: DATABASE_URL
+        fromDatabase:
+          name: reached-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: reached-redis
+          property: connectionString
+
+  # Check-in timers, missed-check-in texts and the every-minute sweep
+  # (-B runs the scheduler inside this worker: keep exactly ONE instance).
+  - type: worker
+    name: reached-worker
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    dockerCommand: celery -A app.tasks worker -B --schedule /tmp/celerybeat-schedule --loglevel=info --concurrency=2
+    plan: starter
+    numInstances: 1
+    envVars:
+      - fromGroup: reached-settings
+      - key: DATABASE_URL
+        fromDatabase:
+          name: reached-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: reached-redis
+          property: connectionString
+
+  - type: keyvalue
+    name: reached-redis
+    plan: free
+    # Celery's queued timers must never be evicted.
+    maxmemoryPolicy: noeviction
+    ipAllowList: [] # only reachable from the services above
+
+databases:
+  - name: reached-db
+    databaseName: reached
+    user: reached
+    plan: basic-256mb
