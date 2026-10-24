@@ -24,6 +24,13 @@ import { AppState } from 'react-native';
 import { getBatteryPercent } from '@/services/battery';
 import { send as reportProblem } from '@/services/error-reporting';
 import { getSosLocation } from '@/services/location';
+import {
+  forgetProfilePhoto,
+  loadSavedPhoto,
+  removeProfilePhoto,
+  syncProfilePhoto,
+  uploadProfilePhoto,
+} from '@/services/profile-photo';
 import { scheduleCheckInNotifications, setUpNotifications } from '@/services/notifications';
 import {
   deleteAccount as deleteAccountOnServer,
@@ -32,7 +39,7 @@ import {
   endSosOnServer,
   fetchCheckInStatus,
   fetchContacts,
-  fetchProfileName,
+  fetchProfile,
   getLoggedInPhone,
   insertContact,
   logOut as logOutOnServer,
@@ -115,6 +122,10 @@ type SafetyStore = {
   // Your name, used in texts to your Circle ("Alex hasn't checked in").
   profileName: string;
   setProfileName: (name: string) => Promise<boolean>;
+  // Your profile picture (a file on this phone), shown to your Circle in alerts.
+  profilePhotoUri: string | null;
+  // A newly picked picture, or null to remove it. Returns an error message, or null.
+  setProfilePhoto: (uri: string | null) => Promise<string | null>;
 
   checkIn: CheckIn | null;
   startCheckIn: (returnBy: Date, choices?: SessionChoices) => Promise<boolean>;
@@ -205,6 +216,7 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
   const [profileName, setProfileNameState] = useState('');
   const [welcomeSeen, setWelcomeSeen] = useState(false);
   const [activeSos, setActiveSos] = useState<ActiveSos | null>(null);
+  const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
   const [sosCountdown, setSosCountdown] = useState<number | null>(null);
 
   // 1) When the app opens: read the phone's copy (fast) and whether you're logged in.
@@ -212,15 +224,18 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
     async function load() {
       setUpNotifications().catch((error) => console.warn('Could not set up notifications', error));
       try {
-        const [localContacts, localCheckIn, localName, seen, localSos] = await Promise.all([
-          loadContacts(),
-          loadCheckIn(),
-          AsyncStorage.getItem(NAME_KEY),
-          AsyncStorage.getItem(WELCOME_KEY),
-          loadSos().catch(() => null),
-        ]);
+        const [localContacts, localCheckIn, localName, seen, localSos, localPhoto] =
+          await Promise.all([
+            loadContacts(),
+            loadCheckIn(),
+            AsyncStorage.getItem(NAME_KEY),
+            AsyncStorage.getItem(WELCOME_KEY),
+            loadSos().catch(() => null),
+            loadSavedPhoto(),
+          ]);
         setContacts(localContacts);
         setActiveSos(localSos);
+        setProfilePhotoUri(localPhoto?.uri ?? null);
         setCheckIn(localCheckIn);
         setProfileNameState(localName ?? '');
         setWelcomeSeen(seen === 'yes');
@@ -263,7 +278,14 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
 
       // Your name: use the server's copy, or upload the phone's copy if the
       // server has none yet.
-      const serverName = await fetchProfileName();
+      const profile = await fetchProfile();
+      const serverName = profile?.displayName ?? null;
+      if (profile) {
+        // Profile picture: match the server's (e.g. after logging in on a new phone).
+        syncProfilePhoto(profile.photoUpdatedAt).then((photo) =>
+          setProfilePhotoUri(photo?.uri ?? null),
+        );
+      }
       if (serverName) {
         setProfileNameState(serverName);
         AsyncStorage.setItem(NAME_KEY, serverName).catch(() => {});
@@ -406,6 +428,8 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
     setProfileNameState('');
     setServerConnected(false);
     setActiveSos(null);
+    setProfilePhotoUri(null);
+    await forgetProfilePhoto();
     await AsyncStorage.multiRemove([CONTACTS_KEY, CHECK_IN_KEY, NAME_KEY, SOS_KEY]).catch(() => {});
   }
 
@@ -444,6 +468,19 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
       setProfileNameState(trimmed);
       AsyncStorage.setItem(NAME_KEY, trimmed).catch(() => {});
       return true;
+    },
+
+    profilePhotoUri,
+    setProfilePhoto: async (uri) => {
+      if (uri === null) {
+        if (!(await removeProfilePhoto())) return "The server couldn't be reached. Check your internet.";
+        setProfilePhotoUri(null);
+        return null;
+      }
+      const result = await uploadProfilePhoto(uri);
+      if (!result.ok) return result.error;
+      setProfilePhotoUri(result.photo.uri);
+      return null;
     },
 
     checkIn,

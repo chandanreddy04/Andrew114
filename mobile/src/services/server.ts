@@ -333,6 +333,19 @@ export async function fetchHistory(limit = 20): Promise<HistoryItem[] | null> {
 
 // ----- Your name -----
 
+/** Your name and when your profile picture last changed (null = none), or null if offline. */
+export async function fetchProfile(): Promise<{
+  displayName: string | null;
+  photoUpdatedAt: string | null;
+} | null> {
+  const result = await request<{ display_name: string | null; photo_updated_at: string | null }>(
+    'GET',
+    '/v1/me',
+  );
+  if (!result.ok) return null;
+  return { displayName: result.data.display_name, photoUpdatedAt: result.data.photo_updated_at };
+}
+
 export async function fetchProfileName(): Promise<string | null> {
   const result = await request<{ display_name: string | null }>('GET', '/v1/me');
   return result.ok ? result.data.display_name : null;

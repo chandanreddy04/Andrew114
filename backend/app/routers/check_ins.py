@@ -23,6 +23,7 @@ from app.cache import clear_history_cache
 from app.config import get_settings
 from app.deps import CurrentUser, Db
 from app.models import CheckIn, SessionPhoto, utcnow
+from app.photos import read_photo
 from app.schemas import (
     CheckInIn,
     CheckInStartedOut,
@@ -134,10 +135,6 @@ def update_location(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-# What a photo file starts with, so only real images are accepted.
-IMAGE_SIGNATURES = {b"\xff\xd8\xff": "image/jpeg", b"\x89PNG": "image/png"}
-
-
 @router.put("/{check_in_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
 async def upload_photo(
     check_in_id: uuid.UUID, photo: UploadFile, user: CurrentUser, db: Db
@@ -145,15 +142,7 @@ async def upload_photo(
     """The outfit photo (JPEG or PNG, at most 5 MB). Replaces any earlier one."""
     c = _own(db, user.id, check_in_id, lock=True)
     _still_going(c)
-    limit = get_settings().max_photo_bytes
-    content = await photo.read(limit + 1)
-    if len(content) > limit:
-        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "The photo is too big (max 5 MB).")
-    content_type = next(
-        (kind for sig, kind in IMAGE_SIGNATURES.items() if content.startswith(sig)), None
-    )
-    if content_type is None:
-        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Use a JPEG or PNG photo.")
+    content, content_type = await read_photo(photo)
     existing = db.get(SessionPhoto, c.id)
     if existing is None:
         db.add(SessionPhoto(check_in_id=c.id, content_type=content_type, content=content))

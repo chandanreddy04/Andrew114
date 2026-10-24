@@ -1,7 +1,6 @@
 /**
- * The outfit photo for a session: take one with the camera or pick one from
- * your photos. Only the photo you choose is used, and it only reaches the
- * server (and your Circle, if an alert triggers) when you start the session.
+ * Taking or picking a photo: the outfit photo for a session, and your
+ * profile picture. Only the photo you choose is used.
  */
 
 import type * as ImagePickerTypes from 'expo-image-picker';
@@ -15,7 +14,11 @@ export type PhotoResult =
 // Smaller files upload faster and stay under the server's 5 MB limit.
 const QUALITY = 0.4;
 
-export async function choosePhoto(source: 'camera' | 'library'): Promise<PhotoResult> {
+// square: crop to a square first (profile pictures).
+export async function choosePhoto(
+  source: 'camera' | 'library',
+  { square = false }: { square?: boolean } = {},
+): Promise<PhotoResult> {
   try {
     // Loaded here (inside try/catch) so a missing module can never crash the
     // Start Session screen.
@@ -32,6 +35,7 @@ export async function choosePhoto(source: 'camera' | 'library'): Promise<PhotoRe
       mediaTypes: ['images'],
       quality: QUALITY,
       exif: false, // no hidden GPS or camera details in the file
+      ...(square ? { allowsEditing: true, aspect: [1, 1] as [number, number] } : {}),
     };
     const result =
       source === 'camera'

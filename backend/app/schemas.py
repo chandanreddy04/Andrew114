@@ -40,6 +40,9 @@ class UserOut(BaseModel):
     id: uuid.UUID
     phone: str
     display_name: str | None
+    # When the profile picture last changed (null = none). Also tells the app
+    # when its saved copy is out of date.
+    photo_updated_at: datetime | None = None
 
 
 class TokensOut(BaseModel):

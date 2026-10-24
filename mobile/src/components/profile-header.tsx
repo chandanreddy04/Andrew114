@@ -1,14 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Image } from 'expo-image';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { BigButton } from '@/components/big-button';
 import { ThemedText } from '@/components/themed-text';
 import { Brand, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { choosePhoto } from '@/services/photos';
 import { useSafety } from '@/state/safety-store';
 
-const AVATAR = 112;
+const AVATAR = 128;
 
 // "+15551234567" -> "(555) 123-4567"; other countries stay as they are.
 function formatPhone(phone: string) {
@@ -17,12 +19,49 @@ function formatPhone(phone: string) {
 }
 
 /**
- * The top of Settings: your picture, name and phone number. Tap it to change
- * your name, which your Circle sees in alerts ("Alex hasn't checked in").
+ * The top of Settings: your picture, name and phone number.
+ * - Tap the picture to take or choose one. Your Circle sees it on alert pages.
+ * - Tap your name to change it ("Alex hasn't checked in").
  */
 export function ProfileHeader() {
-  const { profileName, setProfileName, loggedInPhone } = useSafety();
+  const { profileName, setProfileName, loggedInPhone, profilePhotoUri, setProfilePhoto } =
+    useSafety();
   const theme = useTheme();
+
+  // ----- Profile picture -----
+  const [photoBusy, setPhotoBusy] = useState(false);
+
+  async function changePhoto(next: string | null) {
+    setPhotoBusy(true);
+    const problem = await setProfilePhoto(next);
+    setPhotoBusy(false);
+    if (problem) Alert.alert("Couldn't save your photo", problem);
+  }
+
+  async function pick(source: 'camera' | 'library') {
+    const result = await choosePhoto(source, { square: true });
+    if (result.kind === 'picked') await changePhoto(result.uri);
+    else if (result.kind === 'denied') {
+      Alert.alert(
+        source === 'camera' ? 'Camera not allowed' : 'Photos not allowed',
+        "You can allow it for Androyit in your phone's Settings.",
+      );
+    } else if (result.kind === 'error') {
+      Alert.alert("Couldn't get the photo", result.message);
+    }
+  }
+
+  function handlePhotoPress() {
+    if (Platform.OS === 'web') return pick('library');
+    Alert.alert('Profile photo', 'Your photo will be visible to your Circle of Trust.', [
+      { text: 'Take photo', onPress: () => pick('camera') },
+      { text: 'Choose from photos', onPress: () => pick('library') },
+      ...(profilePhotoUri
+        ? [{ text: 'Remove photo', style: 'destructive' as const, onPress: () => changePhoto(null) }]
+        : []),
+      { text: 'Cancel', style: 'cancel' as const },
+    ]);
+  }
 
   // null = not editing; a string = what's being typed.
   const [draft, setDraft] = useState<string | null>(null);
@@ -44,24 +83,47 @@ export function ProfileHeader() {
   return (
     <View style={styles.header}>
       <Pressable
-        onPress={() => setDraft(profileName)}
-        disabled={draft !== null}
+        onPress={handlePhotoPress}
+        disabled={photoBusy}
         accessibilityRole="button"
-        accessibilityLabel={profileName ? `Edit your name, ${profileName}` : 'Add your name'}
+        accessibilityLabel={profilePhotoUri ? 'Change your profile photo' : 'Add a profile photo'}
         style={styles.avatarWrap}>
-        <View style={[styles.avatar, { backgroundColor: Brand.green }]}>
-          <Ionicons name="person" size={AVATAR * 0.55} color={Brand.onColor} />
+        <View style={[styles.avatar, { backgroundColor: theme.backgroundSelected }]}>
+          {profilePhotoUri ? (
+            <Image source={{ uri: profilePhotoUri }} style={styles.photo} contentFit="cover" />
+          ) : (
+            <Ionicons name="person" size={AVATAR * 0.5} color={theme.textSecondary} />
+          )}
+          {photoBusy && (
+            <View style={styles.busy}>
+              <ActivityIndicator color={Brand.onColor} />
+            </View>
+          )}
         </View>
         <View style={[styles.badge, { borderColor: theme.background }]}>
-          <Ionicons name="pencil" size={14} color={Brand.onColor} />
+          <Ionicons name="camera" size={18} color={Brand.onColor} />
         </View>
       </Pressable>
+      <View style={styles.photoNote}>
+        <ThemedText themeColor="textSecondary">
+          {profilePhotoUri ? 'Tap to change photo' : 'Tap to add a photo'}
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+          Your photo will be visible to your Circle of Trust
+        </ThemedText>
+      </View>
 
       {draft === null ? (
-        <Pressable onPress={() => setDraft(profileName)} accessibilityRole="button" hitSlop={Spacing.two}>
+        <Pressable
+          onPress={() => setDraft(profileName)}
+          accessibilityRole="button"
+          accessibilityLabel={profileName ? `Edit your name, ${profileName}` : 'Add your name'}
+          hitSlop={Spacing.two}
+          style={styles.nameRow}>
           <ThemedText type="subtitle" style={[styles.name, !profileName && { color: Brand.green }]}>
             {profileName || 'Add your name'}
           </ThemedText>
+          <Ionicons name="pencil" size={18} color={Brand.green} />
         </Pressable>
       ) : (
         <View style={styles.editor}>
@@ -123,17 +185,43 @@ const styles = StyleSheet.create({
     width: AVATAR,
     height: AVATAR,
     borderRadius: AVATAR / 2,
+    borderWidth: 4,
+    borderColor: Brand.green,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
+  },
+  busy: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoNote: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    marginTop: Spacing.two,
   },
   badge: {
     position: 'absolute',
     right: 0,
     bottom: 0,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 3,
     backgroundColor: Brand.green,
     alignItems: 'center',

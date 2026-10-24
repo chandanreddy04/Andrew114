@@ -169,6 +169,19 @@ class CheckIn(Base):
     delete_after: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
 
 
+class ProfilePhoto(Base):
+    """Your profile picture, shown to your Circle on alert pages (deleted with you)."""
+
+    __tablename__ = "profile_photos"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    content_type: Mapped[str] = mapped_column(String(30))
+    content: Mapped[bytes] = mapped_column(LargeBinary)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
 class SessionPhoto(Base):
     """The outfit photo for a check-in (deleted with it)."""
 

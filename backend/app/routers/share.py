@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from app import alerts
 from app.deps import Db
-from app.models import CheckIn, SessionPhoto, SosEvent, utcnow
+from app.models import CheckIn, ProfilePhoto, SessionPhoto, SosEvent, utcnow
 
 router = APIRouter(tags=["share"], include_in_schema=False)
 
@@ -64,7 +64,10 @@ def _sos_page(db: Db, sos: SosEvent, token: str) -> HTMLResponse:
     session = _current_session(db, sos.user_id)
     zone = session.time_zone if session else None
     when = escape(alerts.format_time(sos.created_at, zone))
-    rows = [f"<p class='alert'>{name} pressed SOS at {when}.</p>"]
+    rows = [
+        _profile_picture(db, sos.user_id, token, name),
+        f"<p class='alert'>{name} pressed SOS at {when}.</p>",
+    ]
     if session and session.destination:
         rows.append(f"<h2>Where they were going</h2><p>{escape(session.destination)}</p>")
     location = alerts.maps_link(sos.latitude, sos.longitude)
@@ -104,7 +107,8 @@ def details_page(token: str, db: Db) -> HTMLResponse:
     name = escape(alerts.display_name(db, check_in.user_id))
     back_by = escape(alerts.format_time(check_in.return_by, check_in.time_zone))
     rows = [
-        f"<p class='alert'>{name} hasn't checked in. They expected to be back by {back_by}.</p>"
+        _profile_picture(db, check_in.user_id, token, name),
+        f"<p class='alert'>{name} hasn't checked in. They expected to be back by {back_by}.</p>",
     ]
     if check_in.destination:
         rows.append(f"<h2>Where they were going</h2><p>{escape(check_in.destination)}</p>")
@@ -124,6 +128,23 @@ def details_page(token: str, db: Db) -> HTMLResponse:
         )
     rows.append("<p><strong>Please try to contact them.</strong></p>")
     return HTMLResponse(_page(f"{name} needs checking on", "".join(rows)), headers=PRIVATE)
+
+
+def _profile_picture(db: Db, user_id, token: str, name: str) -> str:
+    """Their profile picture at the top of the page (empty if they have none)."""
+    if db.get(ProfilePhoto, user_id) is None:
+        return ""
+    return f"<img class='profile' src='/s/{escape(token)}/profile' alt='Photo of {name}'>"
+
+
+@router.get("/s/{token}/profile")
+def details_profile_picture(token: str, db: Db) -> Response:
+    sos = _active_sos(db, token)
+    owner = sos.user_id if sos else getattr(_alerting(db, token), "user_id", None)
+    photo = db.get(ProfilePhoto, owner) if owner else None
+    if photo is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    return Response(photo.content, media_type=photo.content_type, headers=PRIVATE)
 
 
 @router.get("/s/{token}/photo")
@@ -153,5 +174,7 @@ def _page(title: str, body: str) -> str:
   .muted {{ color: #7B8794; }}
   a {{ color: #14A38B; font-weight: 600; }}
   img {{ max-width: 100%; border-radius: 12px; }}
+  img.profile {{ display: block; width: 120px; height: 120px; object-fit: cover;
+         border-radius: 50%; border: 4px solid #14A38B; margin: 0 auto 16px; }}
 </style></head>
 <body><main><h1>{title}</h1>{body}</main></body></html>"""

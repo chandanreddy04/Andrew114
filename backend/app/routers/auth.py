@@ -11,7 +11,8 @@ from app import otp
 from app.config import get_settings
 from app.deps import Db
 from app.models import User
-from app.schemas import PhoneIn, RefreshIn, TokensOut, UserOut, VerifyIn
+from app.routers.me import user_out
+from app.schemas import PhoneIn, RefreshIn, TokensOut, VerifyIn
 from app.security import (
     create_access_token,
     create_refresh_token,
@@ -29,7 +30,7 @@ def issue_tokens(db: Db, user: User) -> TokensOut:
         access_token=create_access_token(user.id),
         refresh_token=refresh,
         expires_in=get_settings().access_token_minutes * 60,
-        user=UserOut(id=user.id, phone=user.phone, display_name=user.display_name),
+        user=user_out(db, user),
     )
 
 
