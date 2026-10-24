@@ -19,29 +19,9 @@ export default function CircleScreen() {
     addContact,
     updateContact,
     removeContact,
-    profileName,
-    setProfileName,
     loggedInPhone,
   } = useSafety();
   const theme = useTheme();
-
-  // ----- Your name -----
-  // null = not editing (show the saved name); a string = what's being typed.
-  const [nameDraft, setNameDraft] = useState<string | null>(null);
-  const shownName = nameDraft ?? profileName;
-  const nameChanged = nameDraft !== null && nameDraft.trim() !== '' && nameDraft.trim() !== profileName;
-  const [savingName, setSavingName] = useState(false);
-
-  async function handleSaveName() {
-    setSavingName(true);
-    const saved = await setProfileName(shownName);
-    setSavingName(false);
-    if (!saved) {
-      Alert.alert("Couldn't save", 'The server could not be reached. Check your internet and try again.');
-      return;
-    }
-    setNameDraft(null);
-  }
 
   // ----- Add a person -----
   const [name, setName] = useState('');
@@ -158,35 +138,6 @@ export default function CircleScreen() {
 
   return (
     <Screen title="Your Circle">
-      {/* Your name, shown in the texts your Circle receives */}
-      <View style={styles.form}>
-        <ThemedText type="smallBold">Your name</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          Used in the texts, e.g. &quot;{shownName.trim() || 'Alex'} hasn&apos;t checked in.&quot;
-        </ThemedText>
-        <TextInput
-          value={shownName}
-          onChangeText={setNameDraft}
-          placeholder="Your first name"
-          placeholderTextColor={theme.textSecondary}
-          autoCapitalize="words"
-          maxLength={60}
-          style={inputStyle}
-        />
-        {nameChanged && (
-          <BigButton
-            label={savingName ? 'Saving…' : 'Save name'}
-            onPress={handleSaveName}
-            disabled={savingName}
-          />
-        )}
-        {!profileName && !nameChanged && (
-          <ThemedText type="small" style={{ color: Brand.red }}>
-            Add your name so your Circle knows who the alert is about.
-          </ThemedText>
-        )}
-      </View>
-
       <ThemedText themeColor="textSecondary">
         These people get a text if you miss a check-in or press SOS. They don&apos;t need the
         app.

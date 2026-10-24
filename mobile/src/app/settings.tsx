@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Alert, Platform, StyleSheet } from 'react-native';
 
 import { appVersionText } from '@/components/app-version';
+import { ProfileHeader } from '@/components/profile-header';
 import { Screen } from '@/components/screen';
 import { SettingsRow, SettingsSection } from '@/components/settings-list';
 import { ThemedText } from '@/components/themed-text';
@@ -10,11 +11,11 @@ import { Spacing } from '@/constants/theme';
 import { useSafety } from '@/state/safety-store';
 
 /**
- * Settings: your account, subscription (coming soon), session history, the
+ * Settings: your name and number, subscription (coming soon), session history, the
  * "About" links, log out and delete account.
  */
 export default function SettingsScreen() {
-  const { loggedInPhone, profileName, logOut, deleteAccount, checkIn } = useSafety();
+  const { logOut, deleteAccount, checkIn } = useSafety();
   const [busy, setBusy] = useState(false);
 
   // Alert buttons don't work in the web preview, so there we skip the question.
@@ -41,17 +42,8 @@ export default function SettingsScreen() {
   }
 
   return (
-    <Screen title="Settings">
-      <SettingsSection title="Account">
-        <SettingsRow icon="call-outline" title="Phone number" value={loggedInPhone ?? ''} />
-        <SettingsRow
-          icon="person-outline"
-          title="Your name"
-          subtitle={profileName || 'Add your name so your Circle knows who it is'}
-          onPress={() => router.navigate('/circle')}
-          last
-        />
-      </SettingsSection>
+    <Screen title="">
+      <ProfileHeader />
 
       <SettingsSection title="Subscription">
         <SettingsRow icon="card-outline" title="Manage Subscription" comingSoon />
