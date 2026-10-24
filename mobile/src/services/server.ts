@@ -10,7 +10,17 @@
  * you what happened.
  */
 
-import { getSession, onSessionChange, publicRequest, request, saveTokens, setSession } from '@/services/api';
+import { Platform } from 'react-native';
+
+import {
+  getSession,
+  onSessionChange,
+  publicRequest,
+  request,
+  saveTokens,
+  setSession,
+  uploadFile,
+} from '@/services/api';
 import type { Contact } from '@/state/safety-store';
 
 // ----- Logging in with your phone number -----
@@ -159,9 +169,17 @@ export async function updateCheckInLocation(
 
 /** Upload the outfit photo (a JPEG file on the phone). Returns an error message, or null. */
 export async function uploadCheckInPhoto(id: string, uri: string): Promise<string | null> {
+  if (Platform.OS !== 'web') {
+    const result = await uploadFile('PUT', `/v1/check-ins/${id}/photo`, uri, 'photo', 'image/jpeg');
+    return result.ok ? null : result.error;
+  }
+  // The web preview: the picked file is a blob: or data: URL in the browser.
   const form = new FormData();
-  // React Native sends a file when given { uri, name, type }.
-  form.append('photo', { uri, name: 'outfit.jpg', type: 'image/jpeg' } as unknown as Blob);
+  try {
+    form.append('photo', await (await fetch(uri)).blob(), 'outfit.jpg');
+  } catch {
+    return 'Could not read the photo';
+  }
   const result = await request('PUT', `/v1/check-ins/${id}/photo`, form);
   return result.ok ? null : result.error;
 }

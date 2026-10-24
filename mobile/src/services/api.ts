@@ -199,6 +199,49 @@ export async function request<T>(method: string, path: string, body?: unknown): 
   return send<T>(method, path, body, renewed?.accessToken);
 }
 
+/**
+ * Upload a file on the phone (the outfit photo) as a multipart form field,
+ * as the logged-in user. Uses Expo's native uploader: React Native's fetch
+ * can't send a file:// photo on Android ("Could not reach the server").
+ */
+export async function uploadFile(
+  method: 'PUT' | 'POST',
+  path: string,
+  fileUri: string,
+  field: string,
+  mimeType: string,
+): Promise<ApiResult<null>> {
+  if (!API_URL) return { ok: false, status: 0, error: 'Not connected to the server' };
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const FileSystem = require('expo-file-system/legacy') as typeof import('expo-file-system/legacy');
+
+  async function attempt(token: string | undefined): Promise<ApiResult<null>> {
+    try {
+      const result = await FileSystem.uploadAsync(API_URL + path, fileUri, {
+        httpMethod: method,
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: field,
+        mimeType,
+        headers: { Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (result.status >= 200 && result.status < 300) return { ok: true, status: result.status, data: null };
+      return { ok: false, status: result.status, error: errorMessage(safeJson(result.body), result.status) };
+    } catch (error) {
+      return {
+        ok: false,
+        status: 0,
+        error: error instanceof Error ? error.message : 'Could not reach the server. Check your internet.',
+      };
+    }
+  }
+
+  const current = await getSession();
+  if (!current) return { ok: false, status: 401, error: 'Not logged in' };
+  const first = await attempt(current.accessToken);
+  if (first.ok || first.status !== 401 || !(await refreshTokens())) return first;
+  return attempt((await getSession())?.accessToken);
+}
+
 /** A request without logging in (sending and checking login codes). */
 export function publicRequest<T>(method: string, path: string, body?: unknown) {
   return send<T>(method, path, body);
