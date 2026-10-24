@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Brand, BrandGradient, Spacing } from '@/constants/theme';
+import { Brand, brandGradientStyle, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type BigButtonProps = {
@@ -28,7 +28,7 @@ export function BigButton({
   const theme = useTheme();
 
   const look = {
-    primary: { experimental_backgroundImage: BrandGradient, backgroundColor: Brand.green },
+    primary: { ...brandGradientStyle, backgroundColor: Brand.green },
     danger: { backgroundColor: Brand.red },
     plain: { backgroundColor: theme.backgroundElement, borderWidth: 1, borderColor: theme.border },
     outline: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: Brand.green },

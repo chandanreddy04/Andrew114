@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/big-button';
 import { ThemedText } from '@/components/themed-text';
-import { Brand, BrandGradient, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Brand, brandGradientStyle, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type Page = {
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     height: ICON_SIZE,
     borderRadius: ICON_SIZE / 2,
     backgroundColor: Brand.green,
-    experimental_backgroundImage: BrandGradient,
+    ...brandGradientStyle,
     alignItems: 'center',
     justifyContent: 'center',
   },

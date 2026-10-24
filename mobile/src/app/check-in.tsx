@@ -7,7 +7,7 @@ import { BigButton } from '@/components/big-button';
 import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { Brand, BrandGradient, Spacing } from '@/constants/theme';
+import { Brand, brandGradientStyle, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { askNotificationPermission } from '@/services/notifications';
 import { useSafety } from '@/state/safety-store';
@@ -110,7 +110,7 @@ export default function CheckInScreen() {
               style={[
                 styles.preset,
                 selected
-                  ? { backgroundColor: Brand.green, experimental_backgroundImage: BrandGradient }
+                  ? { backgroundColor: Brand.green, ...brandGradientStyle }
                   : { backgroundColor: theme.backgroundElement, borderColor: theme.border, borderWidth: 1 },
               ]}>
               <ThemedText style={selected && { color: Brand.onColor }}>

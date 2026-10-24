@@ -42,6 +42,13 @@ export const Brand = {
 // works without any extra library).
 export const BrandGradient = `linear-gradient(135deg, #1BB99F, ${Brand.greenDark})`;
 
+// The gradient as a style, for places that also set backgroundColor (which
+// is what shows when there's no gradient). Android gets plain teal: its
+// gradient drawing in React Native 0.86 crashes the app (IllegalArgumentException
+// in LinearGradient) when these buttons are redrawn, e.g. when picking a time.
+export const brandGradientStyle =
+  Platform.OS === 'android' ? {} : { experimental_backgroundImage: BrandGradient };
+
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */
