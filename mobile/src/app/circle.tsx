@@ -137,7 +137,7 @@ export default function CircleScreen() {
   ];
 
   return (
-    <Screen title="Your Circle">
+    <Screen title="Circle of Trust">
       <ThemedText themeColor="textSecondary">
         These people get a text if you miss a check-in or press SOS. They don&apos;t need the
         app.
@@ -180,6 +180,10 @@ export default function CircleScreen() {
       </View>
 
       {/* The list of people */}
+      {/* The people you've added. */}
+      <ThemedText type="smallBold" style={styles.listTitle}>
+        Your Circle{contacts.length > 0 ? ` (${contacts.length})` : ''}
+      </ThemedText>
       {contacts.length === 0 ? (
         <ThemedText type="small" themeColor="textSecondary">
           No one in your Circle yet.
@@ -233,6 +237,11 @@ export default function CircleScreen() {
 }
 
 const styles = StyleSheet.create({
+  listTitle: {
+    fontSize: 18,
+    lineHeight: 24,
+    marginBottom: -Spacing.two,
+  },
   form: {
     gap: Spacing.two,
   },
