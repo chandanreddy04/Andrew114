@@ -8,6 +8,7 @@ Run the whole backend on your laptop WITHOUT Docker, PostgreSQL or Redis:
 - instead of a Celery worker, a background thread runs the missed-check-in
   sweep every 15 seconds
 - texts are printed here (SMS_BACKEND=console) unless backend/.env says otherwise
+- everything printed is also saved to backend/dev-server.log
 
 Good for trying the app quickly. For anything real, use docker compose.
 """
@@ -27,6 +28,8 @@ os.environ.setdefault("CELERY_ALWAYS_EAGER", "true")
 os.environ.setdefault("TEST_PHONE_NUMBERS", "+15550001111=123456")
 os.environ.setdefault("JWT_SECRET", "dev-only-secret-not-for-production-use-0000")
 
+import logging  # noqa: E402
+
 import fakeredis  # noqa: E402
 import uvicorn  # noqa: E402
 
@@ -44,6 +47,12 @@ from app.db import Base, SessionLocal, engine  # noqa: E402
 from app.main import app as fastapi_app  # noqa: E402
 
 Base.metadata.create_all(engine)
+
+# Also keep the log in a file (backend/dev-server.log), e.g. to read crash
+# reports from the app after the window was closed.
+_file_log = logging.FileHandler(BACKEND / "dev-server.log", encoding="utf-8")
+_file_log.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+logging.getLogger().addHandler(_file_log)
 
 
 def sweep_forever() -> None:

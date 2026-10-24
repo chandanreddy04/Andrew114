@@ -6,6 +6,7 @@ __pycache__/
 .ruff_cache/
 backend/.env
 backend/dev.db*
+backend/dev-server.log
 
 # Editors / OS
 .DS_Store

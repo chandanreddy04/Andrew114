@@ -42,7 +42,13 @@ def report_client_error(
     message: str, stack: str | None, fatal: bool, metadata: dict[str, object]
 ) -> None:
     """An error from the phone app (sent to POST /v1/client-errors)."""
-    log.warning("App error%s: %s", " (fatal)" if fatal else "", message)
+    log.warning(
+        "App error%s: %s %s\n%s",
+        " (fatal)" if fatal else "",
+        message,
+        {k: v for k, v in metadata.items() if k != "user_id"},
+        stack or "(no stack)",
+    )
     if not bugsnag_enabled():
         return
 

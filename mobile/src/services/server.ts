@@ -316,13 +316,14 @@ export async function reportError(details: {
   isFatal: boolean;
   appVersion?: string;
   platform?: string;
-}): Promise<void> {
-  if (!(await getSession())) return; // reports are tied to a login (prevents spam)
-  await request('POST', '/v1/client-errors', {
+}): Promise<boolean> {
+  if (!(await getSession())) return false; // reports are tied to a login (prevents spam)
+  const result = await request('POST', '/v1/client-errors', {
     message: details.message.slice(0, 2000),
     stack: details.stack?.slice(0, 20000),
     is_fatal: details.isFatal,
     app_version: details.appVersion,
     platform: details.platform,
   });
+  return result.ok;
 }
