@@ -155,7 +155,7 @@ export async function scheduleCheckInNotifications(returnBy: Date | null) {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: "⚠️ You haven't checked in",
-        body: "Your return time has passed. Tap to check in. (In the finished app, your Circle would be alerted now.)",
+        body: "Your return time has passed and your Circle is being texted. Tap to open Androyit and check in.",
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
