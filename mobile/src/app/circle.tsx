@@ -149,7 +149,12 @@ export default function CircleScreen() {
         {/* The phone's contact picker doesn't exist on the web preview. */}
         {!editing && Platform.OS !== 'web' && (
           <>
-            <BigButton label="Import from contacts" variant="outline" onPress={handleImport} />
+            <BigButton
+              label="Import from contacts"
+              variant="outline"
+              size="medium"
+              onPress={handleImport}
+            />
             {/* ——— or ——— : then type the name and number yourself. */}
             <View
               style={styles.separator}
@@ -186,10 +191,11 @@ export default function CircleScreen() {
         )}
         <BigButton
           label={saving ? 'Saving…' : editing ? 'Save changes' : 'Add to Circle'}
+          size="medium"
           onPress={handleSave}
           disabled={!canAdd || saving}
         />
-        {editing && <BigButton label="Cancel" variant="plain" onPress={stopEditing} />}
+        {editing && <BigButton label="Cancel" variant="plain" size="medium" onPress={stopEditing} />}
       </View>
 
       {/* The people you've added. */}

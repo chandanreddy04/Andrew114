@@ -9,8 +9,8 @@ type BigButtonProps = {
   // "primary" = teal gradient, "danger" = red, "plain" = white card,
   // "outline" = teal outline (e.g. the -30m / +30m pills)
   variant?: 'primary' | 'danger' | 'plain' | 'outline';
-  // "small" for compact pills
-  size?: 'normal' | 'small';
+  // "medium" a bit smaller than normal (forms); "small" for compact pills
+  size?: 'normal' | 'medium' | 'small';
   // Text after the label, e.g. "→" on "Next →"
   trailing?: string;
   disabled?: boolean;
@@ -45,12 +45,19 @@ export function BigButton({
       // `pressed` is true while your finger is on the button, so it dims slightly.
       style={({ pressed }) => [
         styles.button,
+        size === 'medium' && styles.medium,
         size === 'small' && styles.small,
         look,
         (pressed || disabled) && styles.dimmed,
       ]}>
       <View style={styles.row}>
-        <Text style={[styles.label, size === 'small' && styles.smallLabel, { color: textColor }]}>
+        <Text
+          style={[
+            styles.label,
+            size === 'medium' && styles.mediumLabel,
+            size === 'small' && styles.smallLabel,
+            { color: textColor },
+          ]}>
           {label}
         </Text>
         {trailing && <Text style={[styles.label, { color: textColor }]}>{trailing}</Text>}
@@ -66,6 +73,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
   },
+  medium: {
+    paddingVertical: Spacing.two + 4,
+  },
   small: {
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.four,
@@ -78,6 +88,9 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 17,
     fontWeight: 700,
+  },
+  mediumLabel: {
+    fontSize: 16,
   },
   smallLabel: {
     fontSize: 15,
