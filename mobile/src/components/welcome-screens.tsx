@@ -20,7 +20,7 @@ type Page = {
 const PAGES: Page[] = [
   {
     icon: 'location',
-    title: 'Welcome to Reached',
+    title: 'Welcome to Androyit',
     text: 'Personal safety for when you go out, without giving up your privacy.',
   },
   {

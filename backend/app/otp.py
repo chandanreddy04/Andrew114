@@ -45,7 +45,7 @@ def send_code(phone: str) -> None:
     r.delete(f"otp-tries:{phone}")
     result = sms.send_sms(
         phone,
-        f"Your Reached code is {code}. It expires in {s.code_valid_minutes} minutes. "
+        f"Your Androyit code is {code}. It expires in {s.code_valid_minutes} minutes. "
         "Don't share it with anyone.",
         use_trial_template=False,
     )

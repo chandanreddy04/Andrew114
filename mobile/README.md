@@ -1,4 +1,4 @@
-# Reached: Android app
+# Androyit: Android app
 
 Expo SDK 57 / React Native app. It talks only to the Reached API in
 [`../backend`](../backend) (see [`../docs/API.md`](../docs/API.md)).

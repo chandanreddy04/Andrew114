@@ -90,7 +90,7 @@ def send_missed_alerts(db: Session) -> int:
         name = display_name(db, user_id)
         back_by = format_time(return_by, time_zone)
         message = (
-            f"🚨 Reached alert: {name} hasn't checked in. "
+            f"🚨 Androyit alert: {name} hasn't checked in. "
             f"They expected to be back by {back_by}. Please try to contact them."
         )
         result = sms.text_everyone(circle_of(db, user_id), message)
@@ -130,7 +130,7 @@ def send_all_clears(db: Session) -> int:
         else:
             name = display_name(db, user_id)
             message = (
-                f"✅ Update from Reached: {name} has checked in and is safe. "
+                f"✅ Update from Androyit: {name} has checked in and is safe. "
                 "Thank you for looking out for them."
             )
             all_clear = sms.text_everyone(circle_of(db, user_id), message).summary
@@ -158,7 +158,7 @@ def send_sos(db: Session, sos: SosEvent) -> sms.TextEveryoneResult:
     name = display_name(db, sos.user_id)
     has_location = sos.latitude is not None and sos.longitude is not None
     message = (
-        f"🆘 SOS from {name} via Reached. "
+        f"🆘 SOS from {name} via Androyit. "
         + (
             "Their location: https://www.google.com/maps/search/?api=1"
             f"&query={sos.latitude},{sos.longitude} "

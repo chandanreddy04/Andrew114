@@ -121,7 +121,7 @@ export function LoginScreen() {
 
   // ----- Step 1: enter your phone number -----
   return (
-    <Screen title="Reached">
+    <Screen title="Androyit">
       <ThemedText themeColor="textSecondary">
         Stay safe without giving up your privacy. Log in with your phone number; we&apos;ll text
         you a code.
@@ -157,7 +157,7 @@ export function LoginScreen() {
           {agreed && <ThemedText style={styles.checkmark}>✓</ThemedText>}
         </View>
         <ThemedText type="small" themeColor="textSecondary" style={styles.consentText}>
-          I agree to receive automated text messages from Reached at this number: login codes
+          I agree to receive automated text messages from Androyit at this number: login codes
           and check-in and safety alerts. Message and data rates may apply. Reply STOP to opt
           out or HELP for help.
         </ThemedText>

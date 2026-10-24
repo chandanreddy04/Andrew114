@@ -1,6 +1,6 @@
-# Reached (custom backend edition)
+# Androyit (custom backend edition of Reached)
 
-Reached is a personal-safety check-in app. Before you go out you set a time
+Androyit (formerly Reached) is a personal-safety check-in app. Before you go out you set a time
 you expect to be back. If you don't tap **"I'm safe"** by then, your **Circle
 of Trust** (people you choose, who don't need the app) get a text. There's
 also an **SOS** button that texts your Circle your location straight away.

@@ -72,7 +72,7 @@ export default function CircleScreen() {
     if (result.kind === 'denied') {
       Alert.alert(
         'Contacts permission needed',
-        'Allow Reached to read contacts in your phone settings, or type the name and number instead.',
+        'Allow Androyit to read contacts in your phone settings, or type the name and number instead.',
       );
       return;
     }

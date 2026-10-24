@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Reached",
+    "name": "Androyit",
     "slug": "andrew114",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -50,14 +50,14 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Reached uses your location only when you press SOS, so your Circle knows where to find you."
+          "locationWhenInUsePermission": "Androyit uses your location only when you press SOS, so your Circle knows where to find you."
         }
       ],
       "expo-notifications",
       [
         "expo-contacts",
         {
-          "contactsPermission": "Reached uses your contacts only to let you pick people for your Circle."
+          "contactsPermission": "Androyit uses your contacts only to let you pick people for your Circle."
         }
       ],
       "expo-secure-store"

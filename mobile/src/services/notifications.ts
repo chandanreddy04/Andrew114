@@ -140,7 +140,7 @@ export async function scheduleCheckInNotifications(returnBy: Date | null) {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '⏰ Almost time to check in',
-        body: `You're due back in ${describeLead(leadMs)}. Open Reached and tap "I'm safe" if you're OK.`,
+        body: `You're due back in ${describeLead(leadMs)}. Open Androyit and tap "I'm safe" if you're OK.`,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,

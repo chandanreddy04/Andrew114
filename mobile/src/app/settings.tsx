@@ -75,7 +75,7 @@ export default function SettingsScreen() {
       </SettingsSection>
 
       <ThemedText type="small" themeColor="textSecondary" style={styles.note}>
-        Heads up: replying STOP to our texts turns off all messages from Reached, including your
+        Heads up: replying STOP to our texts turns off all messages from Androyit, including your
         login codes. Reply START to turn them back on.
       </ThemedText>
 

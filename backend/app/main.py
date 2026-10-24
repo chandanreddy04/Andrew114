@@ -1,5 +1,5 @@
 """
-Reached API: the backend the phone app talks to (HTTP/JSON).
+Androyit API: the backend the phone app talks to (HTTP/JSON).
 
     Mobile app (Expo)  <->  this API (FastAPI)
                               |-- PostgreSQL  (data)
@@ -30,7 +30,7 @@ settings = get_settings()
 configure_bugsnag()
 
 app = FastAPI(
-    title="Reached API",
+    title="Androyit API",
     version="1.0.0",
     # The interactive docs are handy while developing; hidden in production.
     docs_url=None if settings.is_production else "/docs",
@@ -50,6 +50,17 @@ if bugsnag_enabled():
 
 for router in (auth, me, contacts, check_ins, sos, history, client_errors):
     app.include_router(router.router)
+
+
+@app.get("/", tags=["health"])
+def root() -> dict[str, str]:
+    """Opening the server's address in a browser shows this, not "Not Found"."""
+    return {
+        "app": "Androyit API",
+        "status": "running",
+        "health": "/health",
+        "docs": "/docs" if not settings.is_production else "hidden in production",
+    }
 
 
 @app.get("/health", tags=["health"])
