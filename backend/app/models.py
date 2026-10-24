@@ -10,12 +10,14 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     TypeDecorator,
@@ -148,6 +150,36 @@ class CheckIn(Base):
     confirmed_safe_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     all_clear_sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     all_clear_summary: Mapped[str | None] = mapped_column(Text)
+
+    # ----- Shared with your Circle only if an alert triggers -----
+    # Where you said you're going, e.g. "Central Park".
+    destination: Mapped[str | None] = mapped_column(String(120))
+    # Whether your last known location may be shared (the "Location" switch).
+    share_location: Mapped[bool] = mapped_column(Boolean, default=True)
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
+    accuracy_meters: Mapped[float | None] = mapped_column(Float)
+    location_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # Unguessable link for your Circle's details page (/s/<token>), which only
+    # works once the check-in was missed.
+    share_token: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
+
+    # Session data is deleted at this time: 7 days after the session ends,
+    # later if you tap "Keep 7 more days" in Session History.
+    delete_after: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
+
+
+class SessionPhoto(Base):
+    """The outfit photo for a check-in (deleted with it)."""
+
+    __tablename__ = "session_photos"
+
+    check_in_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("check_ins.id", ondelete="CASCADE"), primary_key=True
+    )
+    content_type: Mapped[str] = mapped_column(String(30))
+    content: Mapped[bytes] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class SosEvent(Base):

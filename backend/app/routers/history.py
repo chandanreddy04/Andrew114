@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.cache import cache_history, get_cached_history
 from app.deps import CurrentUser, Db
-from app.models import CheckIn, SosEvent
+from app.models import CheckIn, SessionPhoto, SosEvent
 from app.schemas import HistoryCheckIn, HistorySos
 
 router = APIRouter(prefix="/v1/history", tags=["history"])
@@ -24,6 +24,13 @@ def history(
         .where(CheckIn.user_id == user.id)
         .order_by(CheckIn.started_at.desc())
         .limit(limit)
+    ).all()
+    with_photo = set(
+        db.scalars(
+            select(SessionPhoto.check_in_id).where(
+                SessionPhoto.check_in_id.in_([c.id for c in check_ins])
+            )
+        )
     )
     sos_events = db.scalars(
         select(SosEvent)
@@ -33,6 +40,10 @@ def history(
     )
     items: list[HistoryCheckIn | HistorySos] = [
         HistoryCheckIn(
+            id=c.id,
+            destination=c.destination,
+            has_photo=c.id in with_photo,
+            delete_after=c.delete_after,
             at=c.started_at,
             return_by=c.return_by,
             status=c.status,

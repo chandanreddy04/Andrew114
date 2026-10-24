@@ -212,13 +212,13 @@ def test_missed_check_in_texts_circle_once_then_all_clear(client, user):
 
     make_overdue(check_in_id)
     result = sweep()
-    assert result == {"missed": 1, "alerted": 1, "all_clear": 0}
+    assert result == {"missed": 1, "alerted": 1, "all_clear": 0, "deleted": 0}
     assert len(sms.console_outbox) == 2
     assert "Alex hasn't checked in" in sms.console_outbox[0][1]
     assert "M E" in sms.console_outbox[0][1]  # "… PM EDT" / "AM EST": local time zone
 
     # Running again never texts twice.
-    assert sweep() == {"missed": 0, "alerted": 0, "all_clear": 0}
+    assert sweep() == {"missed": 0, "alerted": 0, "all_clear": 0, "deleted": 0}
     assert len(sms.console_outbox) == 2
 
     status = client.get(f"/v1/check-ins/{check_in_id}", headers=user["headers"]).json()

@@ -191,6 +191,14 @@ export default function HomeScreen() {
           <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
             {overdue ? 'Overdue · ' : ''}ETA {formatClock(checkIn.returnBy)}
           </ThemedText>
+          {checkIn.destination && (
+            <View style={styles.destinationRow}>
+              <Ionicons name="location-outline" size={16} color={theme.textSecondary} />
+              <ThemedText type="small" themeColor="textSecondary">
+                {checkIn.destination}
+              </ThemedText>
+            </View>
+          )}
 
           {/* -30m / +30m, hidden once your Circle was alerted. */}
           {!missed && (
@@ -233,6 +241,20 @@ export default function HomeScreen() {
               label={remindersOn ? 'Reminders on' : 'Reminders off'}
               ok={remindersOn === true}
             />
+            {checkIn.shareLocation && (
+              <StatusChip
+                icon="location-outline"
+                label={checkIn.locationShared ? 'Location shared' : 'Location: waiting'}
+                ok={checkIn.locationShared}
+              />
+            )}
+            {checkIn.photoUri && (
+              <StatusChip
+                icon="camera-outline"
+                label={checkIn.photoShared ? 'Photo shared' : 'Photo: uploading'}
+                ok={checkIn.photoShared}
+              />
+            )}
           </View>
 
           <View style={styles.safeButton}>
@@ -240,7 +262,7 @@ export default function HomeScreen() {
           </View>
           <Pressable onPress={() => router.navigate('/check-in')} accessibilityRole="button">
             <ThemedText type="small" style={[styles.center, { color: Brand.green }]}>
-              Change return time
+              Change session details
             </ThemedText>
           </Pressable>
         </Card>
@@ -334,6 +356,12 @@ function describeAlertsSent(sentAt: string, summary: string | null) {
 }
 
 const styles = StyleSheet.create({
+  destinationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.one,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

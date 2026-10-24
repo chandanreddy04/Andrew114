@@ -30,7 +30,7 @@
       ],
       "blockedPermissions": [
         "android.permission.WRITE_CONTACTS",
-        "android.permission.WRITE_CONTACTS"
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -60,7 +60,15 @@
           "contactsPermission": "Androyit uses your contacts only to let you pick people for your Circle."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Androyit uses your photos only when you pick an outfit photo for a session.",
+          "cameraPermission": "Androyit uses the camera only when you take an outfit photo for a session.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

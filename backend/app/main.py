@@ -22,7 +22,7 @@ from app.cache import get_redis
 from app.config import get_settings
 from app.db import engine
 from app.errors import bugsnag_enabled, configure_bugsnag
-from app.routers import auth, check_ins, client_errors, contacts, history, me, sos
+from app.routers import auth, check_ins, client_errors, contacts, history, me, share, sos
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -48,7 +48,7 @@ if bugsnag_enabled():
 
     app.add_middleware(BugsnagMiddleware)
 
-for router in (auth, me, contacts, check_ins, sos, history, client_errors):
+for router in (auth, me, contacts, check_ins, sos, history, client_errors, share):
     app.include_router(router.router)
 
 

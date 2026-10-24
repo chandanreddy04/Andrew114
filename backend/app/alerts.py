@@ -9,14 +9,15 @@ nobody is ever texted twice.
 
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app import sms
 from app.cache import clear_history_cache
+from app.config import get_settings
 from app.models import CheckIn, Contact, SosEvent, User, utcnow
 
 SENDING = "Sending…"
@@ -48,6 +49,23 @@ def format_time(when: datetime, time_zone: str | None) -> str:
     return f"{hour}:{local.minute:02d} {'AM' if local.hour < 12 else 'PM'} {local.tzname()}"
 
 
+def data_kept_until(ended: datetime) -> datetime:
+    """When a session's data is deleted: N days (7) after it ended."""
+    return ended + timedelta(days=get_settings().session_data_days)
+
+
+def details_link(share_token: str | None) -> str | None:
+    """The Circle's page with destination, outfit photo and location."""
+    base = get_settings().public_base_url.rstrip("/")
+    return f"{base}/s/{share_token}" if base and share_token else None
+
+
+def maps_link(latitude: float | None, longitude: float | None) -> str | None:
+    if latitude is None or longitude is None:
+        return None
+    return f"https://www.google.com/maps/search/?api=1&query={latitude},{longitude}"
+
+
 def alerts_delivered(count: int | None, summary: str | None) -> int:
     """How many alert texts were delivered (older rows only have the summary)."""
     if count is not None:
@@ -61,10 +79,11 @@ def alerts_delivered(count: int | None, summary: str | None) -> int:
 
 def mark_missed(db: Session, check_in_id: uuid.UUID | None = None) -> int:
     """Mark overdue active check-ins (all, or just this one) as missed."""
+    now = utcnow()
     query = (
         update(CheckIn)
-        .where(CheckIn.status == "active", CheckIn.return_by < utcnow())
-        .values(status="missed", missed_at=utcnow())
+        .where(CheckIn.status == "active", CheckIn.return_by < now)
+        .values(status="missed", missed_at=now, delete_after=data_kept_until(now))
         .returning(CheckIn.user_id)
     )
     if check_in_id is not None:
@@ -78,22 +97,22 @@ def mark_missed(db: Session, check_in_id: uuid.UUID | None = None) -> int:
 
 def send_missed_alerts(db: Session) -> int:
     """Text the Circle of everyone whose check-in was missed and not yet texted."""
-    claimed = db.execute(
-        update(CheckIn)
-        .where(CheckIn.status == "missed", CheckIn.alerts_sent_at.is_(None))
-        .values(alerts_sent_at=utcnow(), alerts_summary=SENDING)
-        .returning(CheckIn.id, CheckIn.user_id, CheckIn.return_by, CheckIn.time_zone)
-    ).all()
+    claimed = (
+        db.execute(
+            update(CheckIn)
+            .where(CheckIn.status == "missed", CheckIn.alerts_sent_at.is_(None))
+            .values(alerts_sent_at=utcnow(), alerts_summary=SENDING)
+            .returning(CheckIn.id)
+        )
+        .scalars()
+        .all()
+    )
     db.commit()
 
-    for check_in_id, user_id, return_by, time_zone in claimed:
-        name = display_name(db, user_id)
-        back_by = format_time(return_by, time_zone)
-        message = (
-            f"🚨 Androyit alert: {name} hasn't checked in. "
-            f"They expected to be back by {back_by}. Please try to contact them."
-        )
-        result = sms.text_everyone(circle_of(db, user_id), message)
+    for check_in_id in claimed:
+        check_in = db.get(CheckIn, check_in_id)
+        user_id = check_in.user_id
+        result = sms.text_everyone(circle_of(db, user_id), missed_message(db, check_in))
         db.execute(
             update(CheckIn)
             .where(CheckIn.id == check_in_id)
@@ -102,6 +121,28 @@ def send_missed_alerts(db: Session) -> int:
         db.commit()
         clear_history_cache(str(user_id))
     return len(claimed)
+
+
+def missed_message(db: Session, check_in: CheckIn) -> str:
+    """
+    "🚨 Androyit alert: Alex hasn't checked in. They were going to Central
+    Park and expected to be back by 9:30 PM EDT. Last known location: <map>
+    Details and photo: <link> Please try to contact them."
+    """
+    name = display_name(db, check_in.user_id)
+    back_by = format_time(check_in.return_by, check_in.time_zone)
+    going = f"They were going to {check_in.destination} and" if check_in.destination else "They"
+    parts = [
+        f"🚨 Androyit alert: {name} hasn't checked in. {going} expected to be back by {back_by}."
+    ]
+    location = maps_link(check_in.latitude, check_in.longitude) if check_in.share_location else None
+    if location:
+        parts.append(f"Last known location: {location}")
+    link = details_link(check_in.share_token)
+    if link:
+        parts.append(f"Details: {link}")
+    parts.append("Please try to contact them.")
+    return " ".join(parts)
 
 
 # ----- 2. "All clear" after you tap "I'm safe" on a missed check-in -----
@@ -142,12 +183,30 @@ def send_all_clears(db: Session) -> int:
     return len(claimed)
 
 
+def delete_expired_sessions(db: Session) -> int:
+    """Delete sessions (with their photo and location) whose 7 days are up."""
+    rows = (
+        db.execute(
+            delete(CheckIn)
+            .where(CheckIn.delete_after.is_not(None), CheckIn.delete_after < utcnow())
+            .returning(CheckIn.user_id)
+        )
+        .scalars()
+        .all()
+    )
+    db.commit()
+    for user_id in set(rows):
+        clear_history_cache(str(user_id))
+    return len(rows)
+
+
 def process_all(db: Session) -> dict[str, int]:
     """The every-minute sweep: mark missed, send alerts, send all-clears."""
     return {
         "missed": mark_missed(db),
         "alerted": send_missed_alerts(db),
         "all_clear": send_all_clears(db),
+        "deleted": delete_expired_sessions(db),
     }
 
 

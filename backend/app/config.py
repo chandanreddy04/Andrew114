@@ -49,6 +49,15 @@ class Settings(BaseSettings):
     # Browsers allowed to call the API (the Expo web preview). "*" = any.
     cors_origins: str = "*"
 
+    # The API's public address, used for the details link in alert texts
+    # (e.g. https://reached-api.onrender.com). Empty = no link in texts.
+    public_base_url: str = ""
+
+    # Session data (destination, photo, location) is deleted this many days
+    # after a session ends; "Keep 7 more days" adds the same again.
+    session_data_days: int = 7
+    max_photo_bytes: int = 5 * 1024 * 1024
+
     # Limits
     max_sos_per_10_min: int = 3
     max_codes_per_hour: int = 5

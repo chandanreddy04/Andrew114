@@ -22,7 +22,8 @@ if (!API_URL) {
   console.warn('EXPO_PUBLIC_API_URL is missing: check .env.local. Running without a server.');
 }
 
-const REQUEST_TIMEOUT_MS = 20 * 1000;
+// Long enough for a photo upload on a slow connection.
+const REQUEST_TIMEOUT_MS = 45 * 1000;
 
 // ----- Where the tokens are kept -----
 
@@ -160,15 +161,18 @@ async function send<T>(method: string, path: string, body?: unknown, token?: str
   if (!API_URL) return { ok: false, status: 0, error: 'Not connected to the server' };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  // A FormData body (a photo upload) is sent as-is; fetch sets its own
+  // multipart Content-Type. Everything else is JSON.
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
   try {
     const response = await fetch(API_URL + path, {
       method,
       headers: {
         Accept: 'application/json',
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(body !== undefined && !isForm ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: isForm ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
     const text = await response.text();

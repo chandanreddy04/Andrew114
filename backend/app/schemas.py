@@ -90,6 +90,22 @@ class CheckInIn(BaseModel):
     return_by: datetime
     # e.g. "America/New_York"; texts to your Circle show your local time.
     time_zone: str | None = Field(default=None, max_length=64)
+    # Left out = keep what the active check-in already has (e.g. the Home
+    # screen's +30m only moves the time).
+    destination: str | None = Field(default=None, max_length=120)
+    share_location: bool | None = None
+
+    @field_validator("destination")
+    @classmethod
+    def _strip_destination(cls, value: str | None) -> str | None:
+        value = (value or "").strip()
+        return value or None
+
+
+class LocationIn(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    accuracy_meters: float | None = Field(default=None, ge=0, le=100_000)
 
 
 class CheckInStartedOut(BaseModel):
@@ -103,6 +119,10 @@ class CheckInStatusOut(BaseModel):
     return_by: datetime
     alerts_sent_at: datetime | None
     alerts_summary: str | None
+    destination: str | None = None
+    share_location: bool = True
+    has_location: bool = False
+    has_photo: bool = False
 
 
 class ConfirmSafeOut(BaseModel):
@@ -132,6 +152,11 @@ class SosOut(BaseModel):
 
 class HistoryCheckIn(BaseModel):
     kind: Literal["check-in"] = "check-in"
+    id: uuid.UUID
+    destination: str | None = None
+    has_photo: bool = False
+    # When this session's data will be deleted (null while it's still going).
+    delete_after: datetime | None = None
     at: datetime
     return_by: datetime
     status: Literal["active", "safe", "missed"]
@@ -139,6 +164,10 @@ class HistoryCheckIn(BaseModel):
     alerts_summary: str | None
     confirmed_safe_at: datetime | None
     all_clear_summary: str | None
+
+
+class KeepOut(BaseModel):
+    delete_after: datetime
 
 
 class HistorySos(BaseModel):

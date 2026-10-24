@@ -10,3 +10,4 @@ backend/dev-server.log
 
 # Editors / OS
 .DS_Store
+backend/dev.db.backup-*

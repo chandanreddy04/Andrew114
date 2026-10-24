@@ -1,5 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useColorScheme } from 'react-native';
 
@@ -18,6 +19,8 @@ export default function TabLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       {/* SafetyProvider shares login, check-in and contacts with every screen. */}
+      {/* Dark clock and icons on the light screens (light ones in dark mode). */}
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <SafetyProvider>
         <AnimatedSplashOverlay />
         <LoginGate />

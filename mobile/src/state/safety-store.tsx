@@ -18,12 +18,14 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
+import { getSosLocation } from '@/services/location';
 import { scheduleCheckInNotifications, setUpNotifications } from '@/services/notifications';
 import {
   deleteAccount as deleteAccountOnServer,
+  deleteCheckInPhoto,
   deleteContact,
   fetchCheckInStatus,
   fetchContacts,
@@ -37,7 +39,9 @@ import {
   sendLoginCode,
   sendSos as sendSosOnServer,
   startOrUpdateCheckIn,
+  updateCheckInLocation,
   updateContact as updateContactOnServer,
+  uploadCheckInPhoto,
   verifyLoginCode,
   type EndCheckInResult,
   type ServerCheckIn,
@@ -58,6 +62,20 @@ export type CheckIn = {
   // The server's copy of this check-in, or null if the server never got it.
   // alertsSentAt / alertsSummary say whether your Circle was texted.
   server: ({ id: string } & Partial<ServerCheckIn> & Pick<ServerCheckIn, 'status'>) | null;
+  // Shared with your Circle only if an alert triggers:
+  destination: string | null; // "Central Park"
+  shareLocation: boolean; // the "Location" switch
+  locationShared: boolean; // the server has your last known location
+  photoUri: string | null; // the outfit photo on this phone
+  photoShared: boolean; // the server has the photo
+};
+
+// What the Start Session screen sends. Left out = unchanged.
+// photo: a new picture's file, or null to remove it.
+export type SessionChoices = {
+  destination?: string;
+  shareLocation?: boolean;
+  photo?: string | null;
 };
 
 // Everything a screen can read or do via useSafety().
@@ -83,7 +101,7 @@ type SafetyStore = {
   setProfileName: (name: string) => Promise<boolean>;
 
   checkIn: CheckIn | null;
-  startCheckIn: (returnBy: Date) => Promise<boolean>;
+  startCheckIn: (returnBy: Date, choices?: SessionChoices) => Promise<boolean>;
   // Says whether the server got it in time, or your Circle was already alerted.
   endCheckIn: () => Promise<EndCheckInResult>;
 
@@ -108,6 +126,8 @@ const WELCOME_KEY = 'reached:welcome-seen';
 
 // How often to ask the server about the active check-in.
 const STATUS_POLL_MS = 30 * 1000;
+// Refresh your last known location at most this often (when the app opens).
+const LOCATION_REFRESH_MS = 5 * 60 * 1000;
 
 // ----- Loading from the phone -----
 // AsyncStorage only stores text, so we turn data into JSON text when saving
@@ -129,6 +149,11 @@ async function loadCheckIn(): Promise<CheckIn | null> {
     startedAt: new Date(parsed.startedAt),
     returnBy: new Date(parsed.returnBy),
     server: parsed.server ?? null,
+    destination: parsed.destination ?? null,
+    shareLocation: parsed.shareLocation ?? true,
+    locationShared: parsed.locationShared ?? false,
+    photoUri: parsed.photoUri ?? null,
+    photoShared: parsed.photoShared ?? false,
   };
   return isNaN(checkIn.returnBy.getTime()) ? null : checkIn;
 }
@@ -211,7 +236,10 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
       if (localCheckIn && localCheckIn.returnBy.getTime() > Date.now()) {
         const onServer = localCheckIn.server && (await fetchCheckInStatus(localCheckIn.server.id));
         if (!onServer) {
-          const id = await startOrUpdateCheckIn(localCheckIn.returnBy);
+          const id = await startOrUpdateCheckIn(localCheckIn.returnBy, {
+            destination: localCheckIn.destination ?? undefined,
+            shareLocation: localCheckIn.shareLocation,
+          });
           setCheckIn({ ...localCheckIn, server: id ? { id, status: 'active' } : null });
         }
       }
@@ -277,6 +305,31 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
     };
   }, [serverId, loggedInPhone]);
 
+  // Send your last known location for this session, if the Location switch
+  // is on. Never blocks anything: a missing GPS fix just means no location.
+  const lastLocationAt = useRef(0);
+  async function shareLocationNow(id: string) {
+    lastLocationAt.current = Date.now();
+    const location = await getSosLocation().catch(() => null);
+    if (!location || !(await updateCheckInLocation(id, location))) return;
+    setCheckIn((current) =>
+      current?.server?.id === id ? { ...current, locationShared: true } : current,
+    );
+  }
+
+  // While a session is going, refresh the location when you open the app.
+  const shareLocationOn = checkIn?.shareLocation ?? false;
+  const activeId = checkIn?.server?.status === 'active' ? checkIn.server.id : null;
+  useEffect(() => {
+    if (!activeId || !shareLocationOn) return;
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && Date.now() - lastLocationAt.current > LOCATION_REFRESH_MS) {
+        shareLocationNow(activeId);
+      }
+    });
+    return () => appState.remove();
+  }, [activeId, shareLocationOn]);
+
   // Remove everything about this account from the phone (after log out / delete).
   async function clearPhoneData() {
     setCheckIn(null);
@@ -324,13 +377,43 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
     },
 
     checkIn,
-    startCheckIn: async (returnBy) => {
-      const id = await startOrUpdateCheckIn(returnBy);
-      setCheckIn((current) => ({
-        startedAt: current?.startedAt ?? new Date(),
+    startCheckIn: async (returnBy, choices = {}) => {
+      const previous = checkIn;
+      const id = await startOrUpdateCheckIn(returnBy, {
+        destination: choices.destination,
+        shareLocation: choices.shareLocation,
+      });
+      const sameSession = id !== null && previous?.server?.id === id;
+      const photoUri = choices.photo !== undefined ? choices.photo : (previous?.photoUri ?? null);
+      const shareLocation = choices.shareLocation ?? previous?.shareLocation ?? true;
+      setCheckIn({
+        startedAt: previous?.startedAt ?? new Date(),
         returnBy,
-        server: id ? { id, status: 'active' } : null,
-      }));
+        server: id ? { ...(sameSession ? previous?.server : {}), id, status: 'active' } : null,
+        destination: choices.destination ?? previous?.destination ?? null,
+        shareLocation,
+        locationShared: sameSession && shareLocation ? (previous?.locationShared ?? false) : false,
+        photoUri,
+        photoShared: sameSession && choices.photo === undefined ? (previous?.photoShared ?? false) : false,
+      });
+
+      if (id) {
+        // Photo and location go up in the background, so starting is instant.
+        if (choices.photo) {
+          uploadCheckInPhoto(id, choices.photo).then((problem) => {
+            if (problem) console.warn('Could not upload photo:', problem);
+            else
+              setCheckIn((current) =>
+                current?.server?.id === id ? { ...current, photoShared: true } : current,
+              );
+          });
+        } else if (choices.photo === null && previous?.photoShared && sameSession) {
+          deleteCheckInPhoto(id).catch(() => {});
+        }
+        if (shareLocation && (!sameSession || choices.shareLocation !== undefined)) {
+          shareLocationNow(id);
+        }
+      }
       return id !== null;
     },
     endCheckIn: async () => {

@@ -4,20 +4,33 @@ Check-ins ("sessions"): tell the server when you expect to be back.
 The server keeps watching even if your phone dies. If you don't tap "I'm
 safe" by your return time, it marks the check-in missed and texts your Circle
 (see app/alerts.py and app/tasks.py).
+
+A session can also carry where you're going, an outfit photo and your last
+known location. These are only shown to your Circle if an alert triggers
+(app/routers/share.py), and deleted 7 days after the session ends.
 """
 
+import secrets
 import uuid
 from datetime import timedelta
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app import alerts, tasks
 from app.cache import clear_history_cache
+from app.config import get_settings
 from app.deps import CurrentUser, Db
-from app.models import CheckIn, utcnow
-from app.schemas import CheckInIn, CheckInStartedOut, CheckInStatusOut, ConfirmSafeOut
+from app.models import CheckIn, SessionPhoto, utcnow
+from app.schemas import (
+    CheckInIn,
+    CheckInStartedOut,
+    CheckInStatusOut,
+    ConfirmSafeOut,
+    KeepOut,
+    LocationIn,
+)
 
 router = APIRouter(prefix="/v1/check-ins", tags=["check-ins"])
 
@@ -45,11 +58,25 @@ def start_or_update(body: CheckInIn, user: CurrentUser, db: Db) -> CheckInStarte
         .with_for_update()
     )
     if check_in is None:
-        check_in = CheckIn(user_id=user.id, return_by=return_by, time_zone=body.time_zone)
+        check_in = CheckIn(
+            user_id=user.id,
+            return_by=return_by,
+            time_zone=body.time_zone,
+            share_location=True,
+            share_token=secrets.token_urlsafe(24),
+        )
         db.add(check_in)
     else:
         check_in.return_by = return_by
         check_in.time_zone = body.time_zone
+    # Only change what was sent (the +30m buttons send just the time).
+    if "destination" in body.model_fields_set:
+        check_in.destination = body.destination
+    if "share_location" in body.model_fields_set and body.share_location is not None:
+        check_in.share_location = body.share_location
+        if not body.share_location:  # switched off: forget it straight away
+            check_in.latitude = check_in.longitude = check_in.accuracy_meters = None
+            check_in.location_at = None
     try:
         db.commit()
     except IntegrityError as error:  # two "start" taps at once
@@ -78,7 +105,92 @@ def get_status(check_in_id: uuid.UUID, user: CurrentUser, db: Db) -> CheckInStat
         return_by=c.return_by,
         alerts_sent_at=c.alerts_sent_at,
         alerts_summary=c.alerts_summary,
+        destination=c.destination,
+        share_location=c.share_location,
+        has_location=c.latitude is not None,
+        has_photo=db.get(SessionPhoto, c.id) is not None,
     )
+
+
+def _still_going(c: CheckIn) -> None:
+    """Location and photo can only change while the session isn't over."""
+    if c.status == "safe" or c.confirmed_safe_at is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This session has already ended.")
+
+
+@router.put("/{check_in_id}/location", status_code=status.HTTP_204_NO_CONTENT)
+def update_location(
+    check_in_id: uuid.UUID, body: LocationIn, user: CurrentUser, db: Db
+) -> Response:
+    """Your last known location, shared with your Circle only if an alert triggers."""
+    c = _own(db, user.id, check_in_id, lock=True)
+    _still_going(c)
+    if not c.share_location:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Location sharing is off for this session.")
+    c.latitude, c.longitude = body.latitude, body.longitude
+    c.accuracy_meters = body.accuracy_meters
+    c.location_at = utcnow()
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# What a photo file starts with, so only real images are accepted.
+IMAGE_SIGNATURES = {b"\xff\xd8\xff": "image/jpeg", b"\x89PNG": "image/png"}
+
+
+@router.put("/{check_in_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
+async def upload_photo(
+    check_in_id: uuid.UUID, photo: UploadFile, user: CurrentUser, db: Db
+) -> Response:
+    """The outfit photo (JPEG or PNG, at most 5 MB). Replaces any earlier one."""
+    c = _own(db, user.id, check_in_id, lock=True)
+    _still_going(c)
+    limit = get_settings().max_photo_bytes
+    content = await photo.read(limit + 1)
+    if len(content) > limit:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "The photo is too big (max 5 MB).")
+    content_type = next(
+        (kind for sig, kind in IMAGE_SIGNATURES.items() if content.startswith(sig)), None
+    )
+    if content_type is None:
+        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Use a JPEG or PNG photo.")
+    existing = db.get(SessionPhoto, c.id)
+    if existing is None:
+        db.add(SessionPhoto(check_in_id=c.id, content_type=content_type, content=content))
+    else:
+        existing.content_type, existing.content = content_type, content
+        existing.created_at = utcnow()
+    db.commit()
+    clear_history_cache(str(user.id))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/{check_in_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
+def delete_photo(check_in_id: uuid.UUID, user: CurrentUser, db: Db) -> Response:
+    c = _own(db, user.id, check_in_id)
+    existing = db.get(SessionPhoto, c.id)
+    if existing is not None:
+        db.delete(existing)
+        db.commit()
+        clear_history_cache(str(user.id))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+MAX_KEEP = timedelta(days=90)
+
+
+@router.post("/{check_in_id}/keep")
+def keep_longer(check_in_id: uuid.UUID, user: CurrentUser, db: Db) -> KeepOut:
+    """Session History's "Keep 7 more days" (at most 90 days from now)."""
+    c = _own(db, user.id, check_in_id, lock=True)
+    if c.delete_after is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This session is still going.")
+    now = utcnow()
+    extended = max(c.delete_after, now) + timedelta(days=get_settings().session_data_days)
+    c.delete_after = min(extended, now + MAX_KEEP)
+    db.commit()
+    clear_history_cache(str(user.id))
+    return KeepOut(delete_after=c.delete_after)
 
 
 @router.post("/{check_in_id}/safe")
@@ -95,6 +207,7 @@ def confirm_safe(check_in_id: uuid.UUID, user: CurrentUser, db: Db) -> ConfirmSa
     if c.status == "active":
         c.status = "safe"
         c.ended_at = utcnow()
+        c.delete_after = alerts.data_kept_until(c.ended_at)
         db.commit()
         clear_history_cache(str(user.id))
         return ConfirmSafeOut(result="safe")
@@ -102,6 +215,7 @@ def confirm_safe(check_in_id: uuid.UUID, user: CurrentUser, db: Db) -> ConfirmSa
     if c.status == "missed":
         if c.confirmed_safe_at is None:
             c.confirmed_safe_at = utcnow()
+            c.delete_after = alerts.data_kept_until(c.confirmed_safe_at)
         db.commit()
         clear_history_cache(str(user.id))
         delivered = alerts.alerts_delivered(c.alerts_sent_count, c.alerts_summary)

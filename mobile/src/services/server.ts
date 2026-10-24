@@ -114,21 +114,66 @@ function timeZone(): string | null {
   }
 }
 
+// What you fill in on the Start Session screen. Left out = unchanged (the
+// Home screen's +30m only moves the time).
+export type SessionDetails = {
+  destination?: string;
+  shareLocation?: boolean;
+};
+
 /**
  * Start a check-in on the server, or move the return time of the one that's
  * already active (you can only have one active check-in at a time). The
  * server sets a timer for the return time. Returns the server's id for it.
  */
-export async function startOrUpdateCheckIn(returnBy: Date): Promise<string | null> {
+export async function startOrUpdateCheckIn(
+  returnBy: Date,
+  details: SessionDetails = {},
+): Promise<string | null> {
   const result = await request<{ id: string }>('PUT', '/v1/check-ins/active', {
     return_by: returnBy.toISOString(),
     time_zone: timeZone(),
+    ...(details.destination !== undefined ? { destination: details.destination } : {}),
+    ...(details.shareLocation !== undefined ? { share_location: details.shareLocation } : {}),
   });
   if (!result.ok) {
     console.warn('Could not start check-in:', result.error);
     return null;
   }
   return result.data.id;
+}
+
+/** Your last known location for this session (shared only if an alert triggers). */
+export async function updateCheckInLocation(
+  id: string,
+  location: { latitude: number; longitude: number; accuracyMeters: number | null },
+): Promise<boolean> {
+  const result = await request('PUT', `/v1/check-ins/${id}/location`, {
+    latitude: location.latitude,
+    longitude: location.longitude,
+    accuracy_meters: location.accuracyMeters,
+  });
+  if (!result.ok) console.warn('Could not share location:', result.error);
+  return result.ok;
+}
+
+/** Upload the outfit photo (a JPEG file on the phone). Returns an error message, or null. */
+export async function uploadCheckInPhoto(id: string, uri: string): Promise<string | null> {
+  const form = new FormData();
+  // React Native sends a file when given { uri, name, type }.
+  form.append('photo', { uri, name: 'outfit.jpg', type: 'image/jpeg' } as unknown as Blob);
+  const result = await request('PUT', `/v1/check-ins/${id}/photo`, form);
+  return result.ok ? null : result.error;
+}
+
+export async function deleteCheckInPhoto(id: string): Promise<boolean> {
+  return (await request('DELETE', `/v1/check-ins/${id}/photo`)).ok;
+}
+
+/** "Keep 7 more days" in Session History. Returns the new deletion date, or null. */
+export async function keepSession(id: string): Promise<string | null> {
+  const result = await request<{ delete_after: string }>('POST', `/v1/check-ins/${id}/keep`);
+  return result.ok ? result.data.delete_after : null;
 }
 
 // What really happened when you tapped "I'm safe".
@@ -202,6 +247,10 @@ export async function fetchCheckInStatus(id: string): Promise<ServerCheckIn | nu
 export type HistoryItem =
   | {
       kind: 'check-in';
+      id: string;
+      destination: string | null; // "Central Park"
+      hasPhoto: boolean;
+      deleteAfter: string | null; // when its data is deleted (null while going)
       at: string; // when it started
       returnBy: string;
       status: ServerCheckInStatus;
@@ -220,6 +269,10 @@ export type HistoryItem =
 type HistoryResponse = (
   | {
       kind: 'check-in';
+      id: string;
+      destination: string | null;
+      has_photo: boolean;
+      delete_after: string | null;
       at: string;
       return_by: string;
       status: ServerCheckInStatus;
@@ -245,6 +298,10 @@ export async function fetchHistory(limit = 20): Promise<HistoryItem[] | null> {
         }
       : {
           kind: 'check-in' as const,
+          id: item.id,
+          destination: item.destination,
+          hasPhoto: item.has_photo,
+          deleteAfter: item.delete_after,
           at: item.at,
           returnBy: item.return_by,
           status: item.status,

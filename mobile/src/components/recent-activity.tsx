@@ -1,13 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
 import { type ComponentProps, useCallback, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { BigButton } from '@/components/big-button';
 import { ThemedText } from '@/components/themed-text';
 import { Brand, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { fetchHistory, type HistoryItem } from '@/services/server';
+import { fetchHistory, keepSession, type HistoryItem } from '@/services/server';
 import { useSafety } from '@/state/safety-store';
 import { formatClock, formatWhen } from '@/utils/time';
 
@@ -44,6 +44,23 @@ export function RecentActivity({ filter = 'all' }: { filter?: 'all' | 'alerts' }
     }, [load, checkInKey]),
   );
 
+  // "Keep 7 more days": push back when this session's data is deleted.
+  const [keeping, setKeeping] = useState<string | null>(null);
+  async function keep(id: string) {
+    setKeeping(id);
+    const deleteAfter = await keepSession(id);
+    setKeeping(null);
+    if (!deleteAfter) {
+      Alert.alert("Couldn't keep it longer", 'Check your internet and try again.');
+      return;
+    }
+    setItems(
+      (current) =>
+        current?.map((i) => (i.kind === 'check-in' && i.id === id ? { ...i, deleteAfter } : i)) ??
+        null,
+    );
+  }
+
   const shown =
     filter === 'alerts'
       ? items?.filter((i) => i.kind === 'sos' || i.status === 'missed')
@@ -76,14 +93,31 @@ export function RecentActivity({ filter = 'all' }: { filter?: 'all' | 'alerts' }
             <ThemedText type="smallBold">
               {item.kind === 'sos'
                 ? 'SOS alert'
-                : `Session, ETA ${formatClock(new Date(item.returnBy))}`}
+                : `${item.destination ? item.destination : 'Session'}, ETA ${formatClock(new Date(item.returnBy))}`}
             </ThemedText>
             <ThemedText type="small" style={{ color: outcomeColor(item) }}>
               {describeOutcome(item)}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
               {formatWhen(new Date(item.at))}
+              {item.kind === 'check-in' && item.hasPhoto ? ' · outfit photo' : ''}
             </ThemedText>
+            {item.kind === 'check-in' && item.deleteAfter && (
+              <View style={styles.keepRow}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Deleted {formatDay(new Date(item.deleteAfter))}
+                </ThemedText>
+                <Pressable
+                  onPress={() => keep(item.id)}
+                  disabled={keeping === item.id}
+                  accessibilityRole="button"
+                  hitSlop={Spacing.two}>
+                  <ThemedText type="smallBold" style={{ color: Brand.green }}>
+                    {keeping === item.id ? 'Keeping…' : 'Keep 7 more days'}
+                  </ThemedText>
+                </Pressable>
+              </View>
+            )}
           </View>
         </View>
       ))}
@@ -149,6 +183,11 @@ function iconBackground(item: HistoryItem, soft: string) {
   return outcomeColor(item) === Brand.red ? '#FDECEC' : soft;
 }
 
+// "on Oct 31"
+function formatDay(date: Date) {
+  return `on ${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+}
+
 function capitalize(text: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -175,5 +214,11 @@ const styles = StyleSheet.create({
   texts: {
     flex: 1,
     gap: 2,
+  },
+  keepRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
 });
