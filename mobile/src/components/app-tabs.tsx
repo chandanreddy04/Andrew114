@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, Tabs } from 'expo-router';
+import type { BottomTabBarButtonProps } from 'expo-router/build/react-navigation/bottom-tabs';
 import { type ComponentProps, useEffect, useRef } from 'react';
 import {
   type ColorValue,
@@ -18,6 +19,28 @@ import { useTheme } from '@/hooks/use-theme';
 import { useSafety } from '@/state/safety-store';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
+
+// Android's round press highlight ("ripple") on a tab: a circle just around
+// the icon. The tab bar's own one has no size limit, so it spread far beyond.
+const TAB_RIPPLE = { borderless: true, radius: 22, color: 'rgba(20, 163, 139, 0.2)' };
+
+function TabButton({
+  href: _href,
+  pressColor: _pressColor,
+  pressOpacity: _pressOpacity,
+  hoverEffect: _hoverEffect,
+  ref: _ref,
+  onPress,
+  ...props
+}: BottomTabBarButtonProps) {
+  return (
+    <Pressable
+      {...props}
+      onPress={onPress as ComponentProps<typeof Pressable>['onPress']}
+      android_ripple={TAB_RIPPLE}
+    />
+  );
+}
 
 // A tab icon: filled when the tab is selected, outlined otherwise.
 function tabIcon(filled: IconName, outline: IconName) {
@@ -42,6 +65,7 @@ export default function AppTabs() {
       screenOptions={{
         headerShown: false, // each screen draws its own title
         tabBarShowLabel: false, // icons only, like the design
+        tabBarButton: (props) => <TabButton {...props} />,
         tabBarActiveTintColor: Brand.green,
         tabBarInactiveTintColor: theme.textSecondary,
         tabBarStyle: {
