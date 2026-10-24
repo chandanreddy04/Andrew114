@@ -51,6 +51,9 @@ Supabase version (`chandanreddy04/reached`), rebuilt on our own backend:
 
 ## Quick start (laptop, no Docker needed)
 
+On Windows, just double-click **`start-backend.bat`** in this folder (keep
+its window open while testing; close it to stop). Or by hand:
+
 ```bash
 cd backend
 python -m venv .venv
