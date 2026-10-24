@@ -14,10 +14,11 @@ import { useSafety } from '@/state/safety-store';
 import { formatClock, formatMinutes } from '@/utils/time';
 
 // Quick choices shown as buttons (in minutes).
-// __DEV__ is true only while developing (running through Expo), so the
-// 1-minute test option never appears in the real app, where such a short
-// check-in would cause false alarms.
-const PRESETS = __DEV__ ? [1, 5, 30, 60, 120, 180] : [5, 30, 60, 120, 180];
+// The 1-minute test option appears only while developing (__DEV__) and in
+// test builds (EXPO_PUBLIC_TEST_OPTIONS=1 in the EAS "preview" environment),
+// never in the real app, where such a short check-in would cause false alarms.
+const SHOW_TEST_OPTIONS = __DEV__ || process.env.EXPO_PUBLIC_TEST_OPTIONS === '1';
+const PRESETS = SHOW_TEST_OPTIONS ? [1, 5, 30, 60, 120, 180] : [5, 30, 60, 120, 180];
 const TEST_PRESET = 1;
 const STEP = 15; // the -/+ buttons change the time by this many minutes
 const MIN_MINUTES = 5; // shortest real check-in (the -/+ buttons won't go below this)
