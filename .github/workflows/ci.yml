@@ -29,14 +29,14 @@ jobs:
       - run: ruff check . && ruff format --check .
       - name: Tests (SQLite)
         run: pytest -q
+      - name: Migrations apply (empty database)
+        run: alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+psycopg://reached:reached@localhost:5432/reached_test
       - name: Tests (PostgreSQL)
         run: pytest -q
         env:
           TEST_DATABASE_URL: postgresql+psycopg://reached:reached@localhost:5432/reached_test
-      - name: Migrations apply
-        run: alembic upgrade head
-        env:
-          DATABASE_URL: postgresql+psycopg://reached:reached@localhost:5432/reached_test
 
   mobile:
     runs-on: ubuntu-latest
