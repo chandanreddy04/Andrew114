@@ -1,0 +1,65 @@
+# The whole backend on one machine:
+#   docker compose up --build
+# API on http://localhost:8000 (docs at /docs).
+#
+# Settings come from backend/.env (copy backend/.env.example first).
+
+x-backend: &backend
+  build: ./backend
+  env_file:
+    - path: ./backend/.env
+      required: false
+  environment:
+    DATABASE_URL: postgresql+psycopg://reached:${POSTGRES_PASSWORD:-reached}@db:5432/reached
+    REDIS_URL: redis://redis:6379/0
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  api:
+    <<: *backend
+    ports:
+      - "8000:8000"
+
+  # Runs check-in timers and sends the texts.
+  worker:
+    <<: *backend
+    command: celery -A app.tasks worker --loglevel=info --concurrency=2
+
+  # Starts the every-minute safety sweep. Run exactly ONE of these.
+  beat:
+    <<: *backend
+    command: celery -A app.tasks beat --loglevel=info --schedule /tmp/celerybeat-schedule
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: reached
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reached}
+      POSTGRES_DB: reached
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reached"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:

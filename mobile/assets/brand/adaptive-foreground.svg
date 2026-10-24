@@ -1,0 +1,8 @@
+<!-- Android adaptive icon foreground: pin only, transparent, kept inside the
+     centre "safe zone" so round/squircle icon masks never crop it. 1024x1024. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <g transform="translate(512 512) scale(0.78) translate(-512 -512)">
+    <path d="M512 820 C440 720 282 600 282 430 A230 230 0 1 1 742 430 C742 600 584 720 512 820 Z" fill="#FFFFFF"/>
+    <path d="M405 435 L485 515 L625 365" fill="none" stroke="#1F9D74" stroke-width="72" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

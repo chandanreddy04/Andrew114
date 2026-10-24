@@ -1,0 +1,13 @@
+<!-- Android "themed icon" (monochrome): one colour, so the pin is solid and
+     the checkmark is cut out (transparent). Same size as the foreground. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <mask id="cutout">
+      <rect width="1024" height="1024" fill="#FFFFFF"/>
+      <path d="M405 435 L485 515 L625 365" fill="none" stroke="#000000" stroke-width="72" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <g transform="translate(512 512) scale(0.78) translate(-512 -512)">
+    <path d="M512 820 C440 720 282 600 282 430 A230 230 0 1 1 742 430 C742 600 584 720 512 820 Z" fill="#FFFFFF" mask="url(#cutout)"/>
+  </g>
+</svg>

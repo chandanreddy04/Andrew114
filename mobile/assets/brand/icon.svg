@@ -1,0 +1,10 @@
+<!-- Reached app icon (full square, used for icon.png and favicon). 1024x1024. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#1F9D74"/>
+  <g transform="translate(512 512) scale(0.82) translate(-512 -512)">
+    <!-- map pin -->
+    <path d="M512 820 C440 720 282 600 282 430 A230 230 0 1 1 742 430 C742 600 584 720 512 820 Z" fill="#FFFFFF"/>
+    <!-- checkmark -->
+    <path d="M405 435 L485 515 L625 365" fill="none" stroke="#1F9D74" stroke-width="72" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

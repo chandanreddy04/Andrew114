@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+backend/.env
+backend/dev.db*
+
+# Editors / OS
+.DS_Store
