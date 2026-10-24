@@ -31,11 +31,15 @@ function TabButton({
   hoverEffect: _hoverEffect,
   ref: _ref,
   onPress,
+  style,
   ...props
 }: BottomTabBarButtonProps) {
   return (
     <Pressable
       {...props}
+      // Icon in the middle of the button (the tab bar puts it at the top), so
+      // the ripple, which is centred on the button, sits evenly around it.
+      style={[style, styles.tabButton]}
       onPress={onPress as ComponentProps<typeof Pressable>['onPress']}
       android_ripple={TAB_RIPPLE}
     />
@@ -201,6 +205,9 @@ function SosTabButton() {
 }
 
 const styles = StyleSheet.create({
+  tabButton: {
+    justifyContent: 'center',
+  },
   sosSlot: {
     flex: 1,
     alignItems: 'center',
