@@ -312,12 +312,17 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.safeButton}>
-          <BigButton label="Start a session" onPress={() => router.navigate('/check-in')} />
+          <BigButton
+            label="Start a session"
+            size="medium"
+            onPress={() => router.navigate('/check-in')}
+          />
         </View>
         {contacts.length === 0 && (
           <BigButton
             label="Add people to your Circle"
             variant="plain"
+            size="medium"
             onPress={() => router.navigate('/circle')}
           />
         )}
