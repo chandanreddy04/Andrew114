@@ -148,7 +148,20 @@ export default function CircleScreen() {
         {editing && <ThemedText type="smallBold">Editing {editing.name}</ThemedText>}
         {/* The phone's contact picker doesn't exist on the web preview. */}
         {!editing && Platform.OS !== 'web' && (
-          <BigButton label="Import from contacts" variant="outline" onPress={handleImport} />
+          <>
+            <BigButton label="Import from contacts" variant="outline" onPress={handleImport} />
+            {/* ——— or ——— : then type the name and number yourself. */}
+            <View
+              style={styles.separator}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants">
+              <View style={[styles.separatorLine, { backgroundColor: theme.border }]} />
+              <ThemedText type="small" themeColor="textSecondary" style={styles.separatorText}>
+                or
+              </ThemedText>
+              <View style={[styles.separatorLine, { backgroundColor: theme.border }]} />
+            </View>
+          </>
         )}
         <TextInput
           value={name}
@@ -179,7 +192,6 @@ export default function CircleScreen() {
         {editing && <BigButton label="Cancel" variant="plain" onPress={stopEditing} />}
       </View>
 
-      {/* The list of people */}
       {/* The people you've added. */}
       <ThemedText type="smallBold" style={styles.listTitle}>
         Your Circle{contacts.length > 0 ? ` (${contacts.length})` : ''}
@@ -242,6 +254,19 @@ export default function CircleScreen() {
 }
 
 const styles = StyleSheet.create({
+  separator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    marginVertical: Spacing.one,
+  },
+  separatorLine: {
+    flex: 1,
+    height: 1,
+  },
+  separatorText: {
+    fontWeight: 600,
+  },
   listTitle: {
     fontSize: 18,
     lineHeight: 24,
