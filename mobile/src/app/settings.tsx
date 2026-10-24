@@ -1,22 +1,25 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Platform, StyleSheet } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet } from 'react-native';
 
 import { appVersionText } from '@/components/app-version';
 import { ProfileHeader } from '@/components/profile-header';
 import { Screen } from '@/components/screen';
 import { SettingsRow, SettingsSection } from '@/components/settings-list';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Brand, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { useSafety } from '@/state/safety-store';
 
 /**
  * Settings: your name and number, subscription (coming soon), session history, the
- * "About" links, log out and delete account.
+ * "About" links, delete account, and a Log out button at the very bottom.
  */
 export default function SettingsScreen() {
   const { logOut, deleteAccount, checkIn } = useSafety();
   const [busy, setBusy] = useState(false);
+  const theme = useTheme();
 
   // Alert buttons don't work in the web preview, so there we skip the question.
   function confirm(title: string, message: string, action: string, onYes: () => void) {
@@ -73,18 +76,6 @@ export default function SettingsScreen() {
 
       <SettingsSection title="Account actions">
         <SettingsRow
-          icon="log-out-outline"
-          title={busy ? 'Please wait…' : 'Log out'}
-          onPress={() =>
-            confirm(
-              'Log out?',
-              'Your Circle stays saved in your account. Log in again with this number to get it back.',
-              'Log out',
-              handleLogOut,
-            )
-          }
-        />
-        <SettingsRow
           icon="trash-outline"
           title="Delete my account"
           subtitle={
@@ -106,6 +97,29 @@ export default function SettingsScreen() {
           }
         />
       </SettingsSection>
+
+      {/* Log out: its own button, centred at the very bottom. */}
+      <Pressable
+        onPress={() =>
+          confirm(
+            'Log out?',
+            'Your Circle stays saved in your account. Log in again with this number to get it back.',
+            'Log out',
+            handleLogOut,
+          )
+        }
+        disabled={busy}
+        accessibilityRole="button"
+        style={({ pressed }) => [
+          styles.logOut,
+          { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+          (pressed || busy) && styles.dimmed,
+        ]}>
+        <Ionicons name="log-out-outline" size={22} color={Brand.red} />
+        <ThemedText type="smallBold" style={styles.logOutText}>
+          {busy ? 'Please wait…' : 'Log out'}
+        </ThemedText>
+      </Pressable>
     </Screen>
   );
 }
@@ -113,5 +127,23 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   note: {
     marginHorizontal: Spacing.two,
+  },
+  logOut: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.five,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginTop: Spacing.two,
+  },
+  logOutText: {
+    color: Brand.red,
+    fontSize: 17,
+  },
+  dimmed: {
+    opacity: 0.6,
   },
 });
