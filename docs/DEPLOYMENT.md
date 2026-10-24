@@ -1,6 +1,55 @@
 # Putting Reached live
 
+## 0. Try it on your phone today (no hosting needed)
+
+The test APK (EAS profile `preview`) talks to the backend on your laptop
+over Wi-Fi at `http://192.168.1.245:8000`.
+
+1. On the laptop: `cd backend && .venv\Scripts\python scripts\dev_server.py`.
+   If Windows asks whether Python may use the network, allow **Private
+   networks**.
+2. Phone on the same Wi-Fi: install the APK from the EAS build page, open it,
+   log in with **+15550001111** / **123456**.
+3. Texts are printed in the laptop's terminal (nobody is really texted).
+
+If the laptop's Wi-Fi address changes (check with `ipconfig`), point the app
+at the new one without rebuilding:
+
+```bash
+cd mobile
+npx eas-cli@latest env:update --variable-name EXPO_PUBLIC_API_URL --value http://NEW-IP:8000 --environment preview
+npx eas-cli@latest update --channel preview --environment preview --platform android --message "New API address"
+```
+
+Close and reopen the app twice to pick up the update.
+
 ## 1. The backend
+
+### Option A: Render (easiest, everything managed)
+
+`render.yaml` in this repo describes the whole backend. In the Render
+dashboard: **New → Blueprint →** pick `chandanreddy04/Andrew114` → fill in
+the Twilio and Bugsnag values it asks for → **Apply**. It creates:
+
+| Piece              | Render plan     | About   |
+| ------------------ | --------------- | ------- |
+| `reached-api`      | Starter         | $7/mo   |
+| `reached-worker`   | Starter         | $7/mo   |
+| `reached-db`       | Basic 256 MB    | ~$6/mo  |
+| `reached-redis`    | Free            | $0      |
+
+(Prices as listed by Render; check before applying.) Don't put the API or
+worker on the free plan: free services fall asleep, and the worker is what
+sends missed-check-in texts. The API URL will be like
+`https://reached-api.onrender.com`. Check it with:
+
+```bash
+cd backend && .venv\Scripts\python scripts\smoke_test.py https://reached-api.onrender.com +15550001111 123456
+```
+
+Then point the app at it (section 4).
+
+### Option B: your own server with Docker
 
 Any Linux server (or VM) with Docker works. On it:
 
@@ -84,17 +133,28 @@ cd backend && alembic revision --autogenerate -m "what changed"
 
 ## 4. The Android app
 
+The EAS project is `@chandanreddy04/andrew114`, with EAS Update (instant
+updates) on the `preview` and `production` channels. The API address is the
+EAS environment variable `EXPO_PUBLIC_API_URL`.
+
+Once the backend is hosted, switch the test app to it without rebuilding:
+
 ```bash
 cd mobile
-npx eas-cli@latest init        # creates the EAS project (first time only)
-npx eas-cli@latest env:create --name EXPO_PUBLIC_API_URL --value https://api.your-domain.com --environment preview --visibility plaintext
-npx eas-cli@latest build --profile preview --platform android
+npx eas-cli@latest env:update --variable-name EXPO_PUBLIC_API_URL --value https://reached-api.onrender.com --environment preview
+npx eas-cli@latest update --channel preview --environment preview --platform android --message "Use hosted API"
 ```
+
+For a release build:
+
+```bash
+npx eas-cli@latest env:create --name EXPO_PUBLIC_API_URL --value https://reached-api.onrender.com --environment production --visibility plaintext
+npx eas-cli@latest build --profile production --platform android
+```
+
+Test (`preview`) builds may use plain `http://` (for the laptop); production
+builds only allow HTTPS (`app.config.js`, `ALLOW_HTTP_API` in `eas.json`).
 
 The package name is `com.chandanreddy04.andrew114` (so it can be installed
 next to the old Supabase build). Change it in `app.json` before the first
 Play Store release; it can't change afterwards.
-
-For instant updates (EAS Update) like the old app, run
-`npx expo install expo-updates`, then `npx eas-cli@latest update:configure`,
-and build again.
