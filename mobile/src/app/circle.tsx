@@ -10,7 +10,7 @@ import { Brand, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { pickPhoneContact } from '@/services/contacts';
 import { type Contact, useSafety } from '@/state/safety-store';
-import { isValidPhone, normalizePhone } from '@/utils/phone';
+import { formatPhone, formatPhoneInput, isValidPhone, normalizePhone } from '@/utils/phone';
 
 /** Circle of Trust: the people who get alerted if you miss a check-in. */
 export default function CircleScreen() {
@@ -37,7 +37,7 @@ export default function CircleScreen() {
   function startEditing(contact: Contact) {
     setEditing(contact);
     setName(contact.name);
-    setPhone(contact.phone);
+    setPhone(formatPhoneInput(contact.phone));
   }
 
   function stopEditing() {
@@ -70,7 +70,7 @@ export default function CircleScreen() {
     const fill = (number: string) => {
       setEditing(null);
       setName(result.name);
-      setPhone(number);
+      setPhone(formatPhoneInput(number));
     };
     if (result.phones.length === 1) {
       fill(result.phones[0].number);
@@ -82,7 +82,7 @@ export default function CircleScreen() {
       `${result.name || 'This contact'} has more than one number.`,
       [
         ...result.phones.slice(0, 4).map((p) => ({
-          text: `${p.label}: ${p.number}`,
+          text: `${p.label}: ${formatPhone(formatPhoneInput(p.number))}`,
           onPress: () => fill(p.number),
         })),
         { text: 'Cancel', style: 'cancel' as const },
@@ -160,15 +160,15 @@ export default function CircleScreen() {
         />
         <TextInput
           value={phone}
-          onChangeText={setPhone}
-          placeholder="Phone with country code, e.g. +1 555 123 4567"
+          onChangeText={(text) => setPhone((previous) => formatPhoneInput(text, previous))}
+          placeholder="+1 (234) 567-8900"
           placeholderTextColor={theme.textSecondary}
           keyboardType="phone-pad"
           style={inputStyle}
         />
         {phone.trim() !== '' && !phoneOk && (
           <ThemedText type="small" style={{ color: Brand.red }}>
-            Start with + and the country code (e.g. +1 for US/Canada, +44 UK, +91 India).
+            Enter a 10-digit US number, or + and the country code for other countries (e.g. +44 UK, +91 India).
           </ThemedText>
         )}
         <BigButton
@@ -199,8 +199,13 @@ export default function CircleScreen() {
               </View>
               <View style={styles.rowText}>
                 <ThemedText type="smallBold">{contact.name}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {contact.phone}
+                <ThemedText
+                  type="small"
+                  themeColor="textSecondary"
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}>
+                  {formatPhone(contact.phone)}
                 </ThemedText>
                 {/* Contacts added before Stage 5 may lack a country code. */}
                 {!isValidPhone(contact.phone) && (

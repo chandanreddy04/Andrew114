@@ -7,7 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Brand, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useSafety } from '@/state/safety-store';
-import { isValidPhone, normalizePhone } from '@/utils/phone';
+import { formatPhone, formatPhoneInput, isValidPhone, normalizePhone } from '@/utils/phone';
 
 const RESEND_AFTER_SECONDS = 30;
 
@@ -73,7 +73,7 @@ export function LoginScreen() {
     return (
       <Screen title="Enter your code">
         <ThemedText themeColor="textSecondary">
-          We sent a 6-digit code to {normalizedPhone}.
+          We sent a 6-digit code to {formatPhone(normalizedPhone)}.
         </ThemedText>
 
         <TextInput
@@ -129,8 +129,8 @@ export function LoginScreen() {
 
       <TextInput
         value={phone}
-        onChangeText={setPhone}
-        placeholder="Phone with country code, e.g. +1 555 123 4567"
+        onChangeText={(text) => setPhone((previous) => formatPhoneInput(text, previous))}
+        placeholder="+1 (234) 567-8900"
         placeholderTextColor={theme.textSecondary}
         keyboardType="phone-pad"
         autoComplete="tel"
@@ -138,7 +138,7 @@ export function LoginScreen() {
       />
       {phone.trim() !== '' && !phoneOk && (
         <ThemedText type="small" style={{ color: Brand.red }}>
-          Start with + and the country code (e.g. +1 for US/Canada, +44 UK, +91 India).
+          Enter a 10-digit US number, or + and the country code for other countries (e.g. +44 UK, +91 India).
         </ThemedText>
       )}
 
