@@ -18,10 +18,14 @@ at the new one without rebuilding:
 ```bash
 cd mobile
 npx eas-cli@latest env:update --variable-name EXPO_PUBLIC_API_URL --value http://NEW-IP:8000 --environment preview
-npx eas-cli@latest update --channel preview --environment preview --platform android --message "New API address"
+ALLOW_HTTP_API=1 npx eas-cli@latest update --channel preview --environment preview --platform android --message "New API address"
 ```
 
 Close and reopen the app twice to pick up the update.
+
+`ALLOW_HTTP_API=1` must match how the test APK was built (see `eas.json`);
+without it the update gets a different runtime version and the installed
+app ignores it. In PowerShell, run `$env:ALLOW_HTTP_API="1"` first instead.
 
 ## 1. The backend
 
@@ -142,7 +146,7 @@ Once the backend is hosted, switch the test app to it without rebuilding:
 ```bash
 cd mobile
 npx eas-cli@latest env:update --variable-name EXPO_PUBLIC_API_URL --value https://reached-api.onrender.com --environment preview
-npx eas-cli@latest update --channel preview --environment preview --platform android --message "Use hosted API"
+ALLOW_HTTP_API=1 npx eas-cli@latest update --channel preview --environment preview --platform android --message "Use hosted API"
 ```
 
 For a release build:
