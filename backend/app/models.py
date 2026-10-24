@@ -198,3 +198,10 @@ class SosEvent(Base):
     accuracy_meters: Mapped[float | None] = mapped_column(Float)
     alerts_sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     alerts_summary: Mapped[str | None] = mapped_column(Text)
+    # Phone battery when SOS was pressed (0-100), if the phone could tell.
+    battery_level: Mapped[int | None] = mapped_column(Integer)
+    # Unguessable link for the Circle's details page while the SOS is active.
+    share_token: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
+    # When you tapped "I'm safe", and the "all clear" texts that followed.
+    ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    all_clear_summary: Mapped[str | None] = mapped_column(Text)

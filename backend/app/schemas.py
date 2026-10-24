@@ -140,9 +140,11 @@ class SosIn(BaseModel):
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     accuracy_meters: float | None = Field(default=None, ge=0, le=100_000)
+    battery_level: int | None = Field(default=None, ge=0, le=100)
 
 
 class SosOut(BaseModel):
+    id: uuid.UUID
     sent: int
     total: int
     errors: list[str]
@@ -168,6 +170,12 @@ class HistoryCheckIn(BaseModel):
 
 class KeepOut(BaseModel):
     delete_after: datetime
+
+
+class SosSafeOut(BaseModel):
+    # Your Circle was texted about the SOS, so they're now told you're safe.
+    all_clear_sent: bool
+    all_clear_summary: str | None
 
 
 class HistorySos(BaseModel):

@@ -7,6 +7,7 @@ import { Pressable, ScrollView, StyleSheet, Text, useColorScheme } from 'react-n
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
 import { LoginScreen } from '@/components/login-screen';
+import { SosCountdownOverlay } from '@/components/sos-countdown';
 import { WelcomeScreens } from '@/components/welcome-screens';
 import { send as sendErrorReport, setUpErrorReporting } from '@/services/error-reporting';
 import { SafetyProvider, useSafety } from '@/state/safety-store';
@@ -24,6 +25,8 @@ export default function TabLayout() {
       <SafetyProvider>
         <AnimatedSplashOverlay />
         <LoginGate />
+        {/* "Notifying your circle of trust in 3…" while SOS is held. */}
+        <SosCountdownOverlay />
       </SafetyProvider>
     </ThemeProvider>
   );

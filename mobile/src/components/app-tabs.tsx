@@ -1,18 +1,21 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Tabs } from 'expo-router';
-import { type ComponentProps } from 'react';
+import { router, Tabs } from 'expo-router';
+import { type ComponentProps, useEffect, useRef } from 'react';
 import {
   type ColorValue,
-  type GestureResponderEvent,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
+  ToastAndroid,
+  Vibration,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Brand } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useSafety } from '@/state/safety-store';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -60,7 +63,8 @@ export default function AppTabs() {
         name="sos"
         options={{
           title: 'SOS',
-          tabBarButton: (props) => <SosTabButton onPress={props.onPress ?? undefined} />,
+          // Not a page: holding the button sends the SOS from any screen.
+          tabBarButton: () => <SosTabButton />,
         }}
       />
       <Tabs.Screen
@@ -84,14 +88,82 @@ export default function AppTabs() {
 
 const SOS_SIZE = 72;
 
-// The big round yellow SOS button in the middle of the tab bar.
-function SosTabButton({ onPress }: { onPress?: (e: GestureResponderEvent) => void }) {
+const HOLD_SECONDS = 3;
+
+function toast(message: string) {
+  if (Platform.OS === 'android') ToastAndroid.show(message, ToastAndroid.SHORT);
+}
+
+/**
+ * The big round yellow SOS button in the middle of the tab bar. Hold it for
+ * 3 seconds (it buzzes each second, with a countdown over the screen) and
+ * your Circle is alerted. Letting go earlier cancels, so a pocket tap never
+ * sends one.
+ */
+function SosTabButton() {
+  const { activeSos, triggerSos, setSosCountdown } = useSafety();
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pressedAt = useRef(0);
+  const fired = useRef(false);
+
+  function stopTimer() {
+    if (timer.current) clearInterval(timer.current);
+    timer.current = null;
+  }
+  // Never leave the countdown running if the button goes away.
+  useEffect(() => () => stopTimer(), []);
+
+  function fire() {
+    stopTimer();
+    fired.current = true;
+    setSosCountdown(null);
+    Vibration.vibrate(500);
+    router.navigate('/'); // Home shows the SOS card
+    triggerSos();
+  }
+
+  function handlePressIn() {
+    fired.current = false;
+    pressedAt.current = Date.now();
+    if (activeSos && activeSos.status !== 'failed') return; // already sent; see handlePressOut
+    let left = HOLD_SECONDS;
+    setSosCountdown(left);
+    Vibration.vibrate(60);
+    stopTimer();
+    timer.current = setInterval(() => {
+      left -= 1;
+      if (left > 0) {
+        setSosCountdown(left);
+        Vibration.vibrate(60);
+      } else {
+        fire();
+      }
+    }, 1000);
+  }
+
+  function handlePressOut() {
+    if (fired.current) return;
+    stopTimer();
+    setSosCountdown(null);
+    if (activeSos && activeSos.status !== 'failed') {
+      router.navigate('/');
+      toast('SOS is active. Tap "I\'m Safe" on Home when you\'re OK.');
+    } else if (Date.now() - pressedAt.current < 800) {
+      toast('Hold SOS for 3 seconds to alert your Circle');
+    }
+  }
+
   return (
     <View style={styles.sosSlot}>
       <Pressable
-        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
         accessibilityRole="button"
         accessibilityLabel="SOS"
+        accessibilityHint="Hold for 3 seconds to alert your Circle with your location"
+        // Screen readers: double-tap "activate" sends it straight away.
+        accessibilityActions={[{ name: 'activate', label: 'Send SOS' }]}
+        onAccessibilityAction={(event) => event.nativeEvent.actionName === 'activate' && fire()}
         style={({ pressed }) => [styles.sosButton, pressed && styles.sosPressed]}>
         <Text style={styles.sosText}>SOS</Text>
       </Pressable>

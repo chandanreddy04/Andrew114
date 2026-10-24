@@ -2,12 +2,13 @@
 The page your Circle opens from an alert text (/s/<token>): where you were
 going, your outfit photo, your last known location and when you were due.
 
-It only works while the alert is real: after the check-in was missed and
-before you tapped "I'm safe". Before that, and after, it shows nothing about
-you. The link is long and random, and the page tells search engines to stay
-away.
+It only works while the alert is real: after the check-in was missed (or
+while an SOS is active) and before you tapped "I'm safe". Before that, and
+after, it shows nothing about you. The link is long and random, and the page
+tells search engines to stay away.
 """
 
+from datetime import timedelta
 from html import escape
 
 from fastapi import APIRouter, HTTPException, Response, status
@@ -16,11 +17,13 @@ from sqlalchemy import select
 
 from app import alerts
 from app.deps import Db
-from app.models import CheckIn, SessionPhoto
+from app.models import CheckIn, SessionPhoto, SosEvent, utcnow
 
 router = APIRouter(tags=["share"], include_in_schema=False)
 
 PRIVATE = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"}
+# An SOS link stops working after this long, even if "I'm safe" was never tapped.
+SOS_LINK_HOURS = 24
 
 
 def _alerting(db: Db, token: str) -> CheckIn | None:
@@ -32,8 +35,60 @@ def _alerting(db: Db, token: str) -> CheckIn | None:
     return check_in
 
 
+def _active_sos(db: Db, token: str) -> SosEvent | None:
+    if len(token) < 20:
+        return None
+    sos = db.scalar(select(SosEvent).where(SosEvent.share_token == token))
+    if sos is None or sos.ended_at is not None:
+        return None
+    if sos.created_at < utcnow() - timedelta(hours=SOS_LINK_HOURS):
+        return None
+    return sos
+
+
+def _current_session(db: Db, user_id) -> CheckIn | None:
+    """The session that's going (or missed and not yet resolved), for SOS pages."""
+    return db.scalar(
+        select(CheckIn)
+        .where(
+            CheckIn.user_id == user_id,
+            CheckIn.status.in_(("active", "missed")),
+            CheckIn.confirmed_safe_at.is_(None),
+        )
+        .order_by(CheckIn.started_at.desc())
+    )
+
+
+def _sos_page(db: Db, sos: SosEvent, token: str) -> HTMLResponse:
+    name = escape(alerts.display_name(db, sos.user_id))
+    session = _current_session(db, sos.user_id)
+    zone = session.time_zone if session else None
+    when = escape(alerts.format_time(sos.created_at, zone))
+    rows = [f"<p class='alert'>{name} pressed SOS at {when}.</p>"]
+    if session and session.destination:
+        rows.append(f"<h2>Where they were going</h2><p>{escape(session.destination)}</p>")
+    location = alerts.maps_link(sos.latitude, sos.longitude)
+    if location:
+        rows.append(
+            f"<h2>Location when they pressed SOS</h2>"
+            f"<p><a href='{escape(location)}'>Open in Google Maps</a></p>"
+        )
+    if sos.battery_level is not None:
+        rows.append(f"<h2>Phone battery</h2><p>{sos.battery_level}%</p>")
+    if session and db.get(SessionPhoto, session.id) is not None:
+        rows.append(
+            f"<h2>What they were wearing</h2>"
+            f"<img src='/s/{escape(token)}/photo' alt='Outfit photo'>"
+        )
+    rows.append("<p><strong>Please contact them now.</strong></p>")
+    return HTMLResponse(_page(f"SOS from {name}", "".join(rows)), headers=PRIVATE)
+
+
 @router.get("/s/{token}", response_class=HTMLResponse)
 def details_page(token: str, db: Db) -> HTMLResponse:
+    sos = _active_sos(db, token)
+    if sos is not None:
+        return _sos_page(db, sos, token)
     check_in = _alerting(db, token)
     if check_in is None:
         return HTMLResponse(
@@ -73,7 +128,8 @@ def details_page(token: str, db: Db) -> HTMLResponse:
 
 @router.get("/s/{token}/photo")
 def details_photo(token: str, db: Db) -> Response:
-    check_in = _alerting(db, token)
+    sos = _active_sos(db, token)
+    check_in = _current_session(db, sos.user_id) if sos else _alerting(db, token)
     photo = db.get(SessionPhoto, check_in.id) if check_in else None
     if photo is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")

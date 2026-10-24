@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
+import { getBatteryPercent } from '@/services/battery';
 import { send as reportProblem } from '@/services/error-reporting';
 import { getSosLocation } from '@/services/location';
 import { scheduleCheckInNotifications, setUpNotifications } from '@/services/notifications';
@@ -28,6 +29,7 @@ import {
   deleteAccount as deleteAccountOnServer,
   deleteCheckInPhoto,
   deleteContact,
+  endSosOnServer,
   fetchCheckInStatus,
   fetchContacts,
   fetchProfileName,
@@ -45,6 +47,7 @@ import {
   uploadCheckInPhoto,
   verifyLoginCode,
   type EndCheckInResult,
+  type EndSosResult,
   type ServerCheckIn,
   type SosResult,
 } from '@/services/server';
@@ -70,6 +73,17 @@ export type CheckIn = {
   photoUri: string | null; // the outfit photo on this phone
   photoShared: boolean; // the server has the photo
   photoProblem: string | null; // why the photo couldn't be sent (tap Retry)
+};
+
+// An SOS you sent: active (shown on Home) until you tap "I'm safe".
+export type ActiveSos = {
+  startedAt: Date;
+  // 'sending': getting your location and texting your Circle.
+  status: 'sending' | 'sent' | 'failed';
+  result: SosResult | null;
+  hadLocation: boolean;
+  batteryPercent: number | null;
+  photoShared: boolean; // your session's outfit photo is on the details page
 };
 
 // What the Start Session screen sends. Left out = unchanged.
@@ -114,9 +128,15 @@ type SafetyStore = {
   updateContact: (id: string, name: string, phone: string) => Promise<boolean>;
   removeContact: (id: string) => Promise<boolean>;
 
-  sendSos: (
-    location: { latitude: number; longitude: number; accuracyMeters: number | null } | null,
-  ) => Promise<SosResult>;
+  // ----- SOS (hold the yellow button for 3 seconds) -----
+  activeSos: ActiveSos | null;
+  // Gets your location and battery, then texts your Circle.
+  triggerSos: () => Promise<void>;
+  // "I'm safe": ends the SOS and texts your Circle an all-clear.
+  endSos: () => Promise<EndSosResult>;
+  // 3, 2, 1 while the SOS button is held (drawn over every screen); else null.
+  sosCountdown: number | null;
+  setSosCountdown: (value: number | null) => void;
 };
 
 const SafetyContext = createContext<SafetyStore | null>(null);
@@ -125,6 +145,7 @@ const SafetyContext = createContext<SafetyStore | null>(null);
 const CONTACTS_KEY = 'reached:contacts';
 const CHECK_IN_KEY = 'reached:check-in';
 const NAME_KEY = 'reached:name';
+const SOS_KEY = 'reached:sos';
 // Kept on log-out: the welcome is about the phone, not the account.
 const WELCOME_KEY = 'reached:welcome-seen';
 
@@ -163,6 +184,16 @@ async function loadCheckIn(): Promise<CheckIn | null> {
   return isNaN(checkIn.returnBy.getTime()) ? null : checkIn;
 }
 
+async function loadSos(): Promise<ActiveSos | null> {
+  const text = await AsyncStorage.getItem(SOS_KEY);
+  if (!text) return null;
+  const parsed = JSON.parse(text);
+  const sos: ActiveSos = { ...parsed, startedAt: new Date(parsed.startedAt) };
+  // A send that was cut off (app closed mid-way) can't be resumed.
+  if (sos.status === 'sending') sos.status = 'failed';
+  return isNaN(sos.startedAt.getTime()) ? null : sos;
+}
+
 export function SafetyProvider({ children }: { children: ReactNode }) {
   // useState holds a value and re-draws the screen whenever it changes.
   const [checkIn, setCheckIn] = useState<CheckIn | null>(null);
@@ -173,19 +204,23 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
   const [serverConnected, setServerConnected] = useState(false);
   const [profileName, setProfileNameState] = useState('');
   const [welcomeSeen, setWelcomeSeen] = useState(false);
+  const [activeSos, setActiveSos] = useState<ActiveSos | null>(null);
+  const [sosCountdown, setSosCountdown] = useState<number | null>(null);
 
   // 1) When the app opens: read the phone's copy (fast) and whether you're logged in.
   useEffect(() => {
     async function load() {
       setUpNotifications().catch((error) => console.warn('Could not set up notifications', error));
       try {
-        const [localContacts, localCheckIn, localName, seen] = await Promise.all([
+        const [localContacts, localCheckIn, localName, seen, localSos] = await Promise.all([
           loadContacts(),
           loadCheckIn(),
           AsyncStorage.getItem(NAME_KEY),
           AsyncStorage.getItem(WELCOME_KEY),
+          loadSos().catch(() => null),
         ]);
         setContacts(localContacts);
+        setActiveSos(localSos);
         setCheckIn(localCheckIn);
         setProfileNameState(localName ?? '');
         setWelcomeSeen(seen === 'yes');
@@ -254,6 +289,15 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
 
     syncWithServer().catch((error) => console.warn('Sync failed', error));
   }, [loaded, loggedInPhone]);
+
+  // Keep the phone's copy of an active SOS (so it's still shown after a restart).
+  useEffect(() => {
+    if (!loaded) return;
+    const saving = activeSos
+      ? AsyncStorage.setItem(SOS_KEY, JSON.stringify(activeSos))
+      : AsyncStorage.removeItem(SOS_KEY);
+    saving.catch(() => {});
+  }, [activeSos, loaded]);
 
   // 3) Whenever contacts change (after loading), save the phone's copy.
   useEffect(() => {
@@ -361,7 +405,8 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
     setContacts([]);
     setProfileNameState('');
     setServerConnected(false);
-    await AsyncStorage.multiRemove([CONTACTS_KEY, CHECK_IN_KEY, NAME_KEY]).catch(() => {});
+    setActiveSos(null);
+    await AsyncStorage.multiRemove([CONTACTS_KEY, CHECK_IN_KEY, NAME_KEY, SOS_KEY]).catch(() => {});
   }
 
   const store: SafetyStore = {
@@ -466,7 +511,45 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
       return true;
     },
 
-    sendSos: (location) => sendSosOnServer(location),
+    activeSos,
+    triggerSos: async () => {
+      if (activeSos && activeSos.status !== 'failed') return; // one SOS at a time
+      setActiveSos({
+        startedAt: new Date(),
+        status: 'sending',
+        result: null,
+        hadLocation: false,
+        batteryPercent: null,
+        photoShared: checkIn?.photoShared ?? false,
+      });
+      // Never let a location problem block the SOS: on any error, send without it.
+      const [location, batteryPercent] = await Promise.all([
+        getSosLocation().catch(() => null),
+        getBatteryPercent(),
+      ]);
+      const result = await sendSosOnServer(location, batteryPercent);
+      setActiveSos((current) =>
+        current
+          ? {
+              ...current,
+              status: result.ok ? 'sent' : 'failed',
+              result,
+              hadLocation: location !== null,
+              batteryPercent,
+            }
+          : current,
+      );
+    },
+    endSos: async () => {
+      const id = activeSos?.result?.ok ? activeSos.result.id : null;
+      const result: EndSosResult = id
+        ? await endSosOnServer(id)
+        : { reached: true, allClearSent: false }; // never reached the server
+      if (result.reached) setActiveSos(null);
+      return result;
+    },
+    sosCountdown,
+    setSosCountdown,
   };
 
   // Show nothing until the saved data is loaded. The splash screen stays up

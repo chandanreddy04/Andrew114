@@ -213,19 +213,40 @@ def process_all(db: Session) -> dict[str, int]:
 # ----- 3. SOS -----
 
 
-def send_sos(db: Session, sos: SosEvent) -> sms.TextEveryoneResult:
+def sos_message(db: Session, sos: SosEvent) -> str:
+    """
+    "🆘 SOS from Alex via Androyit. Their location: <map> Battery: 23%.
+    Details: <link> Please contact them now."
+    """
     name = display_name(db, sos.user_id)
-    has_location = sos.latitude is not None and sos.longitude is not None
+    location = maps_link(sos.latitude, sos.longitude)
+    parts = [
+        f"🆘 SOS from {name} via Androyit.",
+        f"Their location: {location}" if location else "Their location is not available.",
+    ]
+    if sos.battery_level is not None:
+        parts.append(f"Battery: {sos.battery_level}%.")
+    link = details_link(sos.share_token)
+    if link:
+        parts.append(f"Details: {link}")
+    parts.append("Please contact them now.")
+    return " ".join(parts)
+
+
+def send_sos_all_clear(db: Session, sos: SosEvent) -> str:
+    """After "I'm safe" on an SOS: tell the Circle, if anyone got the SOS."""
+    if alerts_delivered(None, sos.alerts_summary) == 0:
+        return "Not needed: no SOS text was delivered"
+    name = display_name(db, sos.user_id)
     message = (
-        f"🆘 SOS from {name} via Androyit. "
-        + (
-            "Their location: https://www.google.com/maps/search/?api=1"
-            f"&query={sos.latitude},{sos.longitude} "
-            if has_location
-            else "Their location is not available. "
-        )
-        + "Please contact them now."
+        f"✅ Update from Androyit: {name} says they're safe now. "
+        "Thank you for looking out for them."
     )
+    return sms.text_everyone(circle_of(db, sos.user_id), message).summary
+
+
+def send_sos(db: Session, sos: SosEvent) -> sms.TextEveryoneResult:
+    message = sos_message(db, sos)
     result = sms.text_everyone(circle_of(db, sos.user_id), message)
     sos.alerts_sent_at = utcnow()
     sos.alerts_summary = result.summary

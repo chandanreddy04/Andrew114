@@ -349,38 +349,52 @@ export async function saveProfileName(name: string): Promise<boolean> {
 export type SosResult =
   // trialTemplate: Twilio is on a trial account, so a generic Twilio sample
   // text was sent instead of the real SOS message.
-  | { ok: true; sent: number; total: number; errors: string[]; trialTemplate: boolean }
+  | { ok: true; id: string; sent: number; total: number; errors: string[]; trialTemplate: boolean }
   | { ok: false; error: string };
 
-/** Ask the server to text your whole Circle with your location. */
+/** Ask the server to text your whole Circle with your location and battery. */
 export async function sendSos(
   location: { latitude: number; longitude: number; accuracyMeters: number | null } | null,
+  batteryPercent: number | null = null,
 ): Promise<SosResult> {
   const result = await request<{
+    id: string;
     sent: number;
     total: number;
     errors: string[];
     trial_template: boolean;
-  }>(
-    'POST',
-    '/v1/sos',
-    location
+  }>('POST', '/v1/sos', {
+    ...(location
       ? {
           latitude: location.latitude,
           longitude: location.longitude,
           accuracy_meters: location.accuracyMeters,
         }
-      : {},
-  );
+      : {}),
+    ...(batteryPercent !== null ? { battery_level: batteryPercent } : {}),
+  });
   // The server's own message, e.g. "Too many SOS alerts…".
   if (!result.ok) return { ok: false, error: result.error };
   return {
     ok: true,
+    id: result.data.id,
     sent: result.data.sent,
     total: result.data.total,
     errors: result.data.errors ?? [],
     trialTemplate: result.data.trial_template === true,
   };
+}
+
+export type EndSosResult =
+  | { reached: false; error: string }
+  // allClearSent: your Circle got the SOS, so they're now told you're safe.
+  | { reached: true; allClearSent: boolean };
+
+/** "I'm safe" after an SOS: ends it on the server and texts your Circle an all-clear. */
+export async function endSosOnServer(id: string): Promise<EndSosResult> {
+  const result = await request<{ all_clear_sent: boolean }>('POST', `/v1/sos/${id}/safe`);
+  if (!result.ok) return { reached: false, error: result.error };
+  return { reached: true, allClearSent: result.data.all_clear_sent };
 }
 
 // ----- Crash reports (forwarded to Bugsnag by the server) -----

@@ -292,7 +292,13 @@ def test_sos_with_location_and_rate_limit(client, user):
         headers=user["headers"],
     )
     assert r.status_code == 200
-    assert r.json() == {"sent": 1, "total": 1, "errors": [], "trial_template": False}
+    body = r.json()
+    assert body["id"] and {k: body[k] for k in ("sent", "total", "errors", "trial_template")} == {
+        "sent": 1,
+        "total": 1,
+        "errors": [],
+        "trial_template": False,
+    }
     assert "SOS from Alex" in sms.console_outbox[-1][1]
     assert "query=40.7,-74.0" in sms.console_outbox[-1][1]
 

@@ -6,6 +6,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BigButton } from '@/components/big-button';
 import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
+import { SosCard } from '@/components/sos-card';
 import { ThemedText } from '@/components/themed-text';
 import { Brand, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -162,6 +163,7 @@ export default function HomeScreen() {
     return (
       <Screen title="">
         {header}
+        <SosCard />
 
         {/* Shown once the server has noticed you didn't check in. */}
         {missed && (
@@ -289,6 +291,7 @@ export default function HomeScreen() {
   return (
     <Screen title="">
       {header}
+      <SosCard />
 
       <Card style={styles.sessionCard}>
         <ThemedText type="smallBold" style={styles.cardTitle}>
