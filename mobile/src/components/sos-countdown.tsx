@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
+import { Brand } from '@/constants/theme';
 import { useSafety } from '@/state/safety-store';
 
 /**
@@ -32,7 +33,7 @@ export function SosCountdownOverlay() {
   if (!showing) return null;
 
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1.1] });
-  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0.45] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.7] });
 
   return (
     <View pointerEvents="none" style={styles.overlay} accessibilityLiveRegion="assertive">
@@ -56,7 +57,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 1000,
     elevation: 1000,
-    backgroundColor: 'rgba(196, 150, 18, 0.82)',
+    // Light, see-through grey over the screen; the pulsing circle is yellow.
+    backgroundColor: 'rgba(225, 228, 232, 0.78)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -65,21 +67,18 @@ const styles = StyleSheet.create({
     width: CIRCLE,
     height: CIRCLE,
     borderRadius: CIRCLE / 2,
-    backgroundColor: 'rgba(255, 212, 59, 0.55)',
+    backgroundColor: Brand.yellow,
   },
   texts: {
     alignItems: 'center',
     gap: 8,
   },
   caption: {
-    color: '#FFFFFF',
+    color: '#2C3E50', // dark navy: readable on the grey and on the yellow
     fontSize: 22,
-    fontWeight: 600,
+    fontWeight: 700,
     textAlign: 'center',
     paddingHorizontal: 24,
-    textShadowColor: 'rgba(0, 0, 0, 0.35)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
   },
   number: {
     color: '#FFFFFF',

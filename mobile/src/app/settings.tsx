@@ -9,7 +9,6 @@ import { Screen } from '@/components/screen';
 import { SettingsRow, SettingsSection } from '@/components/settings-list';
 import { ThemedText } from '@/components/themed-text';
 import { Brand, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
 import { useSafety } from '@/state/safety-store';
 
 /**
@@ -19,7 +18,6 @@ import { useSafety } from '@/state/safety-store';
 export default function SettingsScreen() {
   const { logOut, deleteAccount, checkIn } = useSafety();
   const [busy, setBusy] = useState(false);
-  const theme = useTheme();
 
   // Alert buttons don't work in the web preview, so there we skip the question.
   function confirm(title: string, message: string, action: string, onYes: () => void) {
@@ -112,10 +110,9 @@ export default function SettingsScreen() {
         accessibilityRole="button"
         style={({ pressed }) => [
           styles.logOut,
-          { backgroundColor: theme.backgroundElement, borderColor: theme.border },
           (pressed || busy) && styles.dimmed,
         ]}>
-        <Ionicons name="log-out-outline" size={22} color={Brand.red} />
+        <Ionicons name="log-out-outline" size={22} color={Brand.onColor} />
         <ThemedText type="smallBold" style={styles.logOutText}>
           {busy ? 'Please wait…' : 'Log out'}
         </ThemedText>
@@ -136,11 +133,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.five,
     borderRadius: 999,
-    borderWidth: 1,
+    backgroundColor: Brand.red,
     marginTop: Spacing.two,
   },
   logOutText: {
-    color: Brand.red,
+    color: Brand.onColor,
     fontSize: 17,
   },
   dimmed: {
