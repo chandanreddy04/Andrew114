@@ -14,6 +14,7 @@ import {
 
 import { BigButton } from '@/components/big-button';
 import { PhotoViewer } from '@/components/photo-viewer';
+import { TimeWheelPicker } from '@/components/time-wheel-picker';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Brand, Spacing } from '@/constants/theme';
@@ -69,6 +70,9 @@ export default function CheckInScreen() {
   const latest = now + MAX_AHEAD_MINUTES * MINUTE;
   const canEarlier = returnBy.getTime() - STEP_MINUTES * MINUTE >= earliest;
   const canLater = returnBy.getTime() + STEP_MINUTES * MINUTE <= latest;
+
+  // The scroll-wheel time picker (opened by tapping the time).
+  const [pickingTime, setPickingTime] = useState(false);
 
   function moveBy(minutes: number) {
     setReturnBy((current) => {
@@ -224,9 +228,19 @@ export default function CheckInScreen() {
             style={[styles.round, field, !canEarlier && styles.dimmed]}>
             <Ionicons name="remove" size={28} color={theme.text} />
           </Pressable>
-          <View style={[styles.pill, styles.timePill, field]}>
+          {/* Tap the time to pick it on scroll wheels. */}
+          <Pressable
+            onPress={() => setPickingTime(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Back by ${formatClock(returnBy)}. Tap to choose a time.`}
+            style={[styles.pill, styles.timePill, field]}>
             <ThemedText style={styles.time}>{formatClock(returnBy)}</ThemedText>
-          </View>
+            {returnBy.toDateString() !== new Date(now).toDateString() && (
+              <ThemedText type="small" themeColor="textSecondary">
+                Tomorrow
+              </ThemedText>
+            )}
+          </Pressable>
           <Pressable
             onPress={() => moveBy(STEP_MINUTES)}
             disabled={!canLater}
@@ -309,6 +323,21 @@ export default function CheckInScreen() {
         disabled={starting}
       />
 
+      {/* Opened fresh each time, so the wheels start at the current time. */}
+      {pickingTime && (
+        <TimeWheelPicker
+          visible
+          value={returnBy}
+          earliest={earliest}
+          latest={latest}
+          onCancel={() => setPickingTime(false)}
+          onDone={(time) => {
+            setReturnBy(time);
+            setPickingTime(false);
+          }}
+        />
+      )}
+
       {/* View photo: full screen, with change / remove underneath. */}
       <PhotoViewer
         uri={photoUri}
@@ -373,6 +402,7 @@ const styles = StyleSheet.create({
   timePill: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   time: {
     fontSize: 22,
