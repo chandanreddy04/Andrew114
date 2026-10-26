@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { BigButton } from '@/components/big-button';
+import { PhotoViewer } from '@/components/photo-viewer';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Brand, Spacing } from '@/constants/theme';
@@ -105,16 +106,18 @@ export default function CheckInScreen() {
     );
   }
 
-  // Tapping the photo box: add a photo, or change / remove the one there.
+  // Tapping the photo box: add a photo, or view / change / remove the one
+  // there. Android fits only 3 buttons, so tapping outside closes this one.
+  const [viewing, setViewing] = useState(false);
   function handlePhotoPress() {
     if (!photoUri || Platform.OS === 'web') return choosePhotoSource();
     Alert.alert(
       'Outfit photo',
       'Shown to your Circle only if an alert triggers.',
       inShownOrder([
+        { text: 'View photo', onPress: () => setViewing(true) },
         { text: 'Change photo', onPress: choosePhotoSource },
         { text: 'Remove photo', style: 'destructive', onPress: () => setPhotoUri(null) },
-        { text: 'Cancel', style: 'cancel' },
       ]),
       { cancelable: true },
     );
@@ -304,6 +307,15 @@ export default function CheckInScreen() {
         label={starting ? 'Starting…' : checkIn ? 'Update session' : 'Start session'}
         onPress={() => handleStart()}
         disabled={starting}
+      />
+
+      {/* View photo: full screen, with change / remove underneath. */}
+      <PhotoViewer
+        uri={photoUri}
+        visible={viewing}
+        onClose={() => setViewing(false)}
+        onChange={choosePhotoSource}
+        onRemove={() => setPhotoUri(null)}
       />
     </Screen>
   );

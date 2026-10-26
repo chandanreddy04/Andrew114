@@ -2,11 +2,9 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -15,6 +13,7 @@ import {
 } from 'react-native';
 
 import { BigButton } from '@/components/big-button';
+import { PhotoViewer } from '@/components/photo-viewer';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Brand, Spacing } from '@/constants/theme';
@@ -34,7 +33,6 @@ export default function EditProfileScreen() {
   const { profileName, setProfileName, profilePhotoUri, setProfilePhoto, loggedInPhone } =
     useSafety();
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
 
   const [name, setName] = useState(profileName);
   // undefined = photo unchanged; a file = new photo; null = remove it.
@@ -224,56 +222,13 @@ export default function EditProfileScreen() {
       </View>
 
       {/* View photo: full screen, with change / remove underneath. */}
-      <Modal
-        visible={viewing && !!shownPhoto}
-        animationType="fade"
-        onRequestClose={() => setViewing(false)}
-        statusBarTranslucent>
-        <View
-          style={[
-            styles.viewer,
-            {
-              paddingTop: insets.top,
-              paddingBottom: insets.bottom + Spacing.four,
-            },
-          ]}>
-          <Pressable
-            onPress={() => setViewing(false)}
-            accessibilityRole="button"
-            accessibilityLabel="Close photo"
-            hitSlop={Spacing.three}
-            style={styles.viewerClose}>
-            <Ionicons name="close" size={30} color="#FFFFFF" />
-          </Pressable>
-          {shownPhoto && (
-            <Image source={{ uri: shownPhoto }} style={styles.viewerPhoto} contentFit="contain" />
-          )}
-          <View style={styles.viewerActions}>
-            <Pressable
-              onPress={() => {
-                setViewing(false);
-                choosePhotoSource();
-              }}
-              accessibilityRole="button"
-              style={styles.viewerButton}>
-              <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
-              <ThemedText style={styles.viewerButtonText}>Change photo</ThemedText>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setViewing(false);
-                setNewPhoto(null);
-              }}
-              accessibilityRole="button"
-              style={styles.viewerButton}>
-              <Ionicons name="trash-outline" size={20} color="#FF8A8A" />
-              <ThemedText style={[styles.viewerButtonText, { color: '#FF8A8A' }]}>
-                Remove photo
-              </ThemedText>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <PhotoViewer
+        uri={shownPhoto}
+        visible={viewing}
+        onClose={() => setViewing(false)}
+        onChange={choosePhotoSource}
+        onRemove={() => setNewPhoto(null)}
+      />
     </Screen>
   );
 }
@@ -363,32 +318,5 @@ const styles = StyleSheet.create({
   buttons: {
     gap: Spacing.three,
     marginTop: Spacing.two,
-  },
-  viewer: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
-  viewerClose: {
-    alignSelf: 'flex-end',
-    padding: Spacing.three,
-  },
-  viewerPhoto: {
-    flex: 1,
-  },
-  viewerActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    paddingTop: Spacing.three,
-  },
-  viewerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-  },
-  viewerButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
   },
 });
