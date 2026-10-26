@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   Alert,
-  type AlertButton,
   Modal,
   Platform,
   Pressable,
@@ -22,15 +21,10 @@ import { Brand, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { choosePhoto } from '@/services/photos';
 import { useSafety } from '@/state/safety-store';
+import { inShownOrder } from '@/utils/alert';
 import { formatPhone } from '@/utils/phone';
 
 const AVATAR = 150;
-
-// Android stacks dialog buttons bottom-up (the last one ends up on top), so
-// pass them reversed there; the menus then read top to bottom as written.
-function inShownOrder(buttons: AlertButton[]): AlertButton[] {
-  return Platform.OS === 'android' ? [...buttons].reverse() : buttons;
-}
 
 /**
  * Edit Profile (opened from the top of Settings): your photo and name. Your

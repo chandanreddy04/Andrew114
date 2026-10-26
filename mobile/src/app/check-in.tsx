@@ -20,6 +20,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { askNotificationPermission } from '@/services/notifications';
 import { choosePhoto } from '@/services/photos';
 import { useSafety } from '@/state/safety-store';
+import { inShownOrder } from '@/utils/alert';
 import { formatClock } from '@/utils/time';
 
 // The - and + buttons move the return time by this many minutes.
@@ -88,17 +89,35 @@ export default function CheckInScreen() {
     }
   }
 
-  function handlePhotoPress() {
+  // Where the photo comes from.
+  function choosePhotoSource() {
     // Alert buttons don't work in the web preview; there, open the file picker.
     if (Platform.OS === 'web') return pickPhoto('library');
-    Alert.alert('Outfit photo', 'Shown to your Circle only if an alert triggers.', [
-      { text: 'Take photo', onPress: () => pickPhoto('camera') },
-      { text: 'Choose from photos', onPress: () => pickPhoto('library') },
-      ...(photoUri
-        ? [{ text: 'Remove photo', style: 'destructive' as const, onPress: () => setPhotoUri(null) }]
-        : []),
-      { text: 'Cancel', style: 'cancel' as const },
-    ]);
+    Alert.alert(
+      photoUri ? 'Change photo' : 'Outfit photo',
+      'Shown to your Circle only if an alert triggers.',
+      inShownOrder([
+        { text: 'Take photo', onPress: () => pickPhoto('camera') },
+        { text: 'Choose from gallery', onPress: () => pickPhoto('library') },
+        { text: 'Cancel', style: 'cancel' },
+      ]),
+      { cancelable: true },
+    );
+  }
+
+  // Tapping the photo box: add a photo, or change / remove the one there.
+  function handlePhotoPress() {
+    if (!photoUri || Platform.OS === 'web') return choosePhotoSource();
+    Alert.alert(
+      'Outfit photo',
+      'Shown to your Circle only if an alert triggers.',
+      inShownOrder([
+        { text: 'Change photo', onPress: choosePhotoSource },
+        { text: 'Remove photo', style: 'destructive', onPress: () => setPhotoUri(null) },
+        { text: 'Cancel', style: 'cancel' },
+      ]),
+      { cancelable: true },
+    );
   }
 
   async function start(time: Date) {
