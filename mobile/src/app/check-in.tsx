@@ -29,7 +29,7 @@ import { formatClock } from '@/utils/time';
 const STEP_MINUTES = 15;
 // The earliest return time allowed, and the latest (from now).
 const MIN_AHEAD_MINUTES = 5;
-const MAX_AHEAD_MINUTES = 12 * 60;
+const MAX_AHEAD_MINUTES = 24 * 60;
 // A 1-minute test session appears only while developing (__DEV__) and in test
 // builds (EXPO_PUBLIC_TEST_OPTIONS=1 in the EAS "preview" environment), never
 // in the real app, where such a short session would cause false alarms.
@@ -235,11 +235,6 @@ export default function CheckInScreen() {
             accessibilityLabel={`Back by ${formatClock(returnBy)}. Tap to choose a time.`}
             style={[styles.pill, styles.timePill, field]}>
             <ThemedText style={styles.time}>{formatClock(returnBy)}</ThemedText>
-            {returnBy.toDateString() !== new Date(now).toDateString() && (
-              <ThemedText type="small" themeColor="textSecondary">
-                Tomorrow
-              </ThemedText>
-            )}
           </Pressable>
           <Pressable
             onPress={() => moveBy(STEP_MINUTES)}
@@ -250,6 +245,13 @@ export default function CheckInScreen() {
             <Ionicons name="add" size={28} color={theme.text} />
           </Pressable>
         </View>
+        {/* On its own line under the time, when the time is tomorrow. */}
+        {returnBy.toDateString() !== new Date(now).toDateString() && (
+          <ThemedText type="small" themeColor="textSecondary" style={styles.dayNote}>
+            Tomorrow,{' '}
+            {returnBy.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+          </ThemedText>
+        )}
         {SHOW_TEST_OPTIONS && !checkIn && (
           <Pressable
             onPress={() => handleStart(new Date(Date.now() + MINUTE))}
@@ -402,7 +404,9 @@ const styles = StyleSheet.create({
   timePill: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+  },
+  dayNote: {
+    textAlign: 'center',
   },
   time: {
     fontSize: 22,

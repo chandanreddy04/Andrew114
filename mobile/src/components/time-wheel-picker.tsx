@@ -117,7 +117,7 @@ export function TimeWheelPicker({
           {tooSoon
             ? 'Pick a time at least 5 minutes from now.'
             : tooLate
-              ? 'Pick a time within the next 12 hours.'
+              ? 'Pick a time within the next 24 hours.'
               : `${isTomorrow(chosen) ? 'Tomorrow' : 'Today'}, ${formatClock(chosen)}`}
         </ThemedText>
       </View>
