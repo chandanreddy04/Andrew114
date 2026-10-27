@@ -84,3 +84,32 @@ export async function getRoughLocation(): Promise<{ latitude: number; longitude:
     return null;
   }
 }
+
+/** Whether Androyit may use your location (without asking). */
+export async function isLocationAllowed(): Promise<boolean> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Location = require('expo-location') as typeof LocationTypes;
+    return (await Location.getForegroundPermissionsAsync()).granted;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The street address at a position, e.g. "1100 Congress Ave, Austin, TX",
+ * worked out by the phone itself. Null if it can't tell (or on the web).
+ */
+export async function addressAt(latitude: number, longitude: number): Promise<string | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Location = require('expo-location') as typeof LocationTypes;
+    const [found] = await Location.reverseGeocodeAsync({ latitude, longitude });
+    if (!found) return null;
+    const street = found.streetNumber && found.street ? `${found.streetNumber} ${found.street}` : (found.street ?? found.name);
+    const parts = [street, found.city ?? found.subregion, found.region].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : (found.formattedAddress ?? null);
+  } catch {
+    return null;
+  }
+}

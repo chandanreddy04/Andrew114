@@ -253,3 +253,38 @@ def search(
             )
             log.warning("TomTom address search failed: %s %s", type(error).__name__, status or "")
     return _photon_search(query, near)
+
+
+# ----- Map preview (Start Session, under the Location switch) -----
+
+MAP_IMAGE = "https://api.tomtom.com/map/1/staticimage"
+
+
+def map_image(latitude: float, longitude: float, width: int, height: int) -> bytes | None:
+    """A JPEG street map centred on the position (TomTom). None without a key or on error."""
+    key = get_settings().tomtom_api_key
+    if not key:
+        return None
+    try:
+        response = httpx.get(
+            MAP_IMAGE,
+            params={
+                "key": key,
+                "center": f"{longitude},{latitude}",
+                "zoom": 16,
+                "width": width,
+                "height": height,
+                "format": "jpg",
+                "layer": "basic",
+                "style": "main",
+                "view": "Unified",
+            },
+            timeout=8,
+        )
+        response.raise_for_status()
+    except httpx.HTTPError as error:
+        # Not the error itself: its text includes the URL, with the key.
+        status = error.response.status_code if isinstance(error, httpx.HTTPStatusError) else None
+        log.warning("Map image failed: %s %s", type(error).__name__, status or "")
+        return None
+    return response.content

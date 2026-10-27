@@ -14,6 +14,9 @@ os.environ.update(
     TEST_PHONE_NUMBERS="+15550001111=123456,+15550002222=654321",
     BUGSNAG_API_KEY="",
     TWILIO_TRIAL_TEMPLATE="",
+    # Address search and maps: tests use stand-in answers, never real keys.
+    GOOGLE_MAPS_API_KEY="",
+    TOMTOM_API_KEY="",
 )
 
 import fakeredis  # noqa: E402

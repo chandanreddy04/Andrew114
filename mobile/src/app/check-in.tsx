@@ -13,6 +13,7 @@ import {
 
 import { BigButton } from '@/components/big-button';
 import { DestinationSearch } from '@/components/destination-search';
+import { LocationPreview } from '@/components/location-preview';
 import { PhotoViewer } from '@/components/photo-viewer';
 import { TimeWheelPicker } from '@/components/time-wheel-picker';
 import { Screen } from '@/components/screen';
@@ -311,6 +312,8 @@ export default function CheckInScreen() {
             accessibilityLabel="Share my location if an alert triggers"
           />
         </View>
+        {/* Where you are now: shown only while location sharing is on. */}
+        {shareLocation && <LocationPreview />}
       </View>
 
       <ThemedText type="small" themeColor="textSecondary" style={styles.note}>

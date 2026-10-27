@@ -123,6 +123,11 @@ class PlaceOut(BaseModel):
     source: Literal["google", "tomtom", "openstreetmap"] = "openstreetmap"
 
 
+class MapPreviewOut(BaseModel):
+    # The map as a data: URL ("data:image/jpeg;base64,…"), ready for an <Image>.
+    image: str
+
+
 class LocationIn(BaseModel):
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)

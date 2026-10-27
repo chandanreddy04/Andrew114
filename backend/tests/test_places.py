@@ -267,3 +267,27 @@ def test_tomtom_error_falls_back_without_logging_key(client, user, monkeypatch, 
     r = client.get("/v1/places", params={"q": "olive garden"}, headers=user["headers"])
     assert r.json()[0]["source"] == "openstreetmap"
     assert "tt-secret-key" not in caplog.text
+
+
+def test_map_preview(client, user, monkeypatch):
+    monkeypatch.setattr(get_settings(), "tomtom_api_key", "tt-key")
+    asked: list[dict] = []
+
+    def get(url, params, timeout):
+        asked.append(params)
+        return httpx.Response(200, content=b"PNG fake", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(places.httpx, "get", get)
+    r = client.get(
+        "/v1/places/map-preview", params={"lat": 30.2672, "lng": -97.7431}, headers=user["headers"]
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["image"].startswith("data:image/jpeg;base64,")
+    assert asked[0]["center"] == "-97.7431,30.2672"
+
+
+def test_map_preview_without_key(client, user):
+    r = client.get(
+        "/v1/places/map-preview", params={"lat": 30.2672, "lng": -97.7431}, headers=user["headers"]
+    )
+    assert r.status_code == 503

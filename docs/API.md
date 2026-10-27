@@ -54,6 +54,7 @@ address search (the Circle's page then links to it on a map).
 | ------ | ----------------------------- | -------------------- | ------- |
 | GET    | `/v1/places`                  | `q` (3+ letters), `lat?`, `lng?`, `session?` | `[{name, address, latitude, longitude, place_id, source}]`: up to 6 real places, nearby first. Google Places when `GOOGLE_MAPS_API_KEY` is set (then without a position), else TomTom when `TOMTOM_API_KEY` is set, else OpenStreetMap via Photon. Empty if no search service can be reached |
 | GET    | `/v1/places/{place_id}`       | `session?`           | `{address, latitude, longitude, ...}` of a picked Google result. 404 if not found |
+| GET    | `/v1/places/map-preview`      | `lat`, `lng`, `width?`, `height?` | `{image}`: a JPEG street map (data: URL) centred there, for Start Session's location preview. Needs `TOMTOM_API_KEY` (503 without). The position isn't saved |
 
 `session` is one id per round of typing and picking, so Google bills it as a single search.
 

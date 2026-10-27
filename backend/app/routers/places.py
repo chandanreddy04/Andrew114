@@ -1,11 +1,13 @@
-"""Address search for Start Session's "Where are you going?"."""
+"""Address search for Start Session's "Where are you going?", and the map preview."""
+
+import base64
 
 from fastapi import APIRouter, HTTPException, Path, Query, status
 
 from app import places
 from app.cache import hit_rate_limit
 from app.deps import CurrentUser
-from app.schemas import PlaceOut
+from app.schemas import MapPreviewOut, PlaceOut
 
 router = APIRouter(prefix="/v1/places", tags=["places"])
 
@@ -30,6 +32,25 @@ def search_places(
 ) -> list[PlaceOut]:
     _limit(user)
     return places.search(q, lat, lng, session)
+
+
+@router.get("/map-preview")
+def map_preview(
+    user: CurrentUser,
+    lat: float = Query(ge=-90, le=90),
+    lng: float = Query(ge=-180, le=180),
+    width: int = Query(default=720, ge=100, le=1200),
+    height: int = Query(default=336, ge=100, le=1200),
+) -> MapPreviewOut:
+    """A small street map of where you are, shown under the Location switch.
+
+    Your position is only passed on to draw the map; it isn't saved.
+    """
+    _limit(user)
+    image = places.map_image(lat, lng, width, height)
+    if image is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "The map isn't available.")
+    return MapPreviewOut(image=f"data:image/jpeg;base64,{base64.b64encode(image).decode()}")
 
 
 @router.get("/{place_id}")

@@ -167,6 +167,19 @@ export async function searchPlaces(
   return result.ok ? result.data : [];
 }
 
+/**
+ * A street map image of `position` (a data: URL for <Image>), drawn by the
+ * server. Null if the map isn't available. The position isn't saved.
+ */
+export async function fetchMapPreview(position: MapPosition): Promise<string | null> {
+  const params = new URLSearchParams({
+    lat: position.latitude.toFixed(5),
+    lng: position.longitude.toFixed(5),
+  });
+  const result = await request<{ image: string }>('GET', `/v1/places/map-preview?${params}`);
+  return result.ok ? result.data.image : null;
+}
+
 /** The full address and position of a picked Google result (null if it couldn't be found). */
 export async function fetchPlaceDetails(placeId: string, session: string): Promise<Place | null> {
   const params = new URLSearchParams({ session });
