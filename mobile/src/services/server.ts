@@ -144,12 +144,12 @@ export type Place = {
   latitude: number | null;
   longitude: number | null;
   place_id: string | null;
-  source: 'google' | 'openstreetmap';
+  source: 'google' | 'tomtom' | 'openstreetmap';
 };
 
 /**
- * Real places and addresses matching what you typed (Google Places, or
- * OpenStreetMap when the server has no Google key). `near` puts places close
+ * Real places and addresses matching what you typed (Google Places, TomTom
+ * or OpenStreetMap, depending on the server's keys). `near` puts places close
  * to you first. `session` ties one round of typing and picking together (for
  * Google's billing). Empty if nothing was found or the server can't be reached.
  */

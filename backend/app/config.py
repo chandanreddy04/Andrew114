@@ -58,8 +58,13 @@ class Settings(BaseSettings):
     # Google Cloud API key with "Places API (New)" turned on. Empty = use
     # Photon below instead.
     google_maps_api_key: str = ""
+    # TomTom Search: commercial map data (businesses and addresses), free for
+    # 2,500 searches a day with no card. Used when there's no Google key.
+    # Key from developer.tomtom.com.
+    tomtom_api_key: str = ""
     # Photon: free OpenStreetMap search, no key needed (fewer businesses and
-    # weaker at typos). Any Photon-compatible server works.
+    # weaker at typos), used when neither key is set. Any Photon-compatible
+    # server works.
     places_url: str = "https://photon.komoot.io/api/"
 
     # Session data (destination, photo, location) is deleted this many days

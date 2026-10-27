@@ -198,3 +198,72 @@ def test_google_down_falls_back_to_openstreetmap(client, user, monkeypatch):
 def test_details_without_google_is_not_found(client, user):
     r = client.get("/v1/places/ChIJolive123456", headers=user["headers"])
     assert r.status_code == 404
+
+
+TOMTOM_ANSWER = {
+    "results": [
+        {
+            "type": "POI",
+            "poi": {"name": "Olive Garden Italian Restaurant"},
+            "address": {"freeformAddress": "2001 S Lamar Blvd, Austin, TX 78704"},
+            "position": {"lat": 30.2449, "lon": -97.7811},
+        },
+        {
+            "type": "Point Address",
+            "address": {"freeformAddress": "2001 S Lamar Blvd, Austin, TX 78704"},
+            "position": {"lat": 30.245, "lon": -97.781},
+        },
+    ]
+}
+
+
+def test_tomtom_search(client, user, monkeypatch):
+    monkeypatch.setattr(get_settings(), "tomtom_api_key", "tt-key")
+    asked: list[tuple[str, dict]] = []
+
+    def get(url, params, timeout):
+        asked.append((url, params))
+        return httpx.Response(200, json=TOMTOM_ANSWER, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(places.httpx, "get", get)
+    r = client.get(
+        "/v1/places",
+        params={"q": "olive gard/en", "lat": 30.2672, "lng": -97.7431},
+        headers=user["headers"],
+    )
+    assert r.status_code == 200, r.text
+    assert r.json() == [
+        {
+            "name": "Olive Garden Italian Restaurant",
+            "address": "2001 S Lamar Blvd, Austin, TX 78704",
+            "latitude": 30.2449,
+            "longitude": -97.7811,
+            "place_id": None,
+            "source": "tomtom",
+        },
+        {
+            "name": "2001 S Lamar Blvd, Austin, TX 78704",
+            "address": "",
+            "latitude": 30.245,
+            "longitude": -97.781,
+            "place_id": None,
+            "source": "tomtom",
+        },
+    ]
+    url, params = asked[0]
+    assert url == f"{places.TOMTOM}/olive%20gard%2Fen.json"
+    assert params["typeahead"] == "true" and params["lat"] == 30.27
+
+
+def test_tomtom_error_falls_back_without_logging_key(client, user, monkeypatch, caplog):
+    monkeypatch.setattr(get_settings(), "tomtom_api_key", "tt-secret-key")
+
+    def get(url, params, **kwargs):
+        if "tomtom" in url:  # refused: the error text holds the URL, with the key
+            return httpx.Response(403, request=httpx.Request("GET", url, params=params))
+        return httpx.Response(200, json=PHOTON_ANSWER, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(places.httpx, "get", get)
+    r = client.get("/v1/places", params={"q": "olive garden"}, headers=user["headers"])
+    assert r.json()[0]["source"] == "openstreetmap"
+    assert "tt-secret-key" not in caplog.text

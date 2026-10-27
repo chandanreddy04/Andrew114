@@ -7,7 +7,10 @@ the picked place's address and position (two calls, billed by Google as one
 "session" when they share a session token). Google's results aren't stored,
 as its terms require.
 
-Without a key, or if Google can't be reached, Photon is asked instead
+Without a Google key, TomTom Search is used (settings.tomtom_api_key):
+commercial map data, free for 2,500 searches a day, positions included.
+
+Without either key, or if they can't be reached, Photon is asked instead
 (OpenStreetMap data, settings.places_url), with answers kept in Redis for a
 day. Either way, places near the phone come first when its rough location
 is given.
@@ -15,6 +18,7 @@ is given.
 
 import json
 import logging
+from urllib.parse import quote
 
 import httpx
 import redis
@@ -110,6 +114,42 @@ def place_details(place_id: str, session: str | None = None) -> PlaceOut | None:
     )
 
 
+# ----- TomTom Search -----
+
+TOMTOM = "https://api.tomtom.com/search/2/search"
+
+
+def _tomtom_search(query: str, near: tuple[float, float] | None) -> list[PlaceOut]:
+    params: dict[str, str | int | float] = {
+        "key": get_settings().tomtom_api_key,
+        "typeahead": "true",  # the last word may be half-typed
+        "limit": MAX_RESULTS,
+        "language": "en-US",
+    }
+    if near:
+        params["lat"], params["lon"] = near
+    # The query goes in the path; quote it so "/" or "#" can't change the URL.
+    response = httpx.get(f"{TOMTOM}/{quote(query, safe='')}.json", params=params, timeout=5)
+    response.raise_for_status()
+    places: list[PlaceOut] = []
+    for result in response.json().get("results") or []:
+        position = result.get("position") or {}
+        address = (result.get("address") or {}).get("freeformAddress") or ""
+        name = (result.get("poi") or {}).get("name") or address
+        if not name or "lat" not in position or "lon" not in position:
+            continue
+        place = PlaceOut(
+            name=name,
+            address=address if address != name else "",
+            latitude=position["lat"],
+            longitude=position["lon"],
+            source="tomtom",
+        )
+        if all((p.name, p.address) != (place.name, place.address) for p in places):
+            places.append(place)
+    return places
+
+
 # ----- Photon (OpenStreetMap) -----
 
 
@@ -197,9 +237,19 @@ def search(
         if latitude is not None and longitude is not None
         else None
     )
-    if get_settings().google_maps_api_key:
+    settings = get_settings()
+    if settings.google_maps_api_key:
         try:
             return _google_search(query, near, session)
         except (httpx.HTTPError, ValueError) as error:
-            log.warning("Google address search failed, using OpenStreetMap: %s", error)
+            log.warning("Google address search failed: %s", error)
+    elif settings.tomtom_api_key:
+        try:
+            return _tomtom_search(query, near)
+        except (httpx.HTTPError, ValueError) as error:
+            # Not the error itself: its text includes the URL, with the key.
+            status = (
+                error.response.status_code if isinstance(error, httpx.HTTPStatusError) else None
+            )
+            log.warning("TomTom address search failed: %s %s", type(error).__name__, status or "")
     return _photon_search(query, near)

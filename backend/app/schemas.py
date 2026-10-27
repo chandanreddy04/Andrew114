@@ -120,7 +120,7 @@ class PlaceOut(BaseModel):
     longitude: float | None = None
     place_id: str | None = None
     # Who the result is from, for the credit under the list.
-    source: Literal["google", "openstreetmap"] = "openstreetmap"
+    source: Literal["google", "tomtom", "openstreetmap"] = "openstreetmap"
 
 
 class LocationIn(BaseModel):

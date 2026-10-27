@@ -18,6 +18,13 @@ import {
 const PAUSE_MS = 400;
 const MIN_LETTERS = 3;
 
+// Shown under the results, as each search service asks.
+const CREDITS: Record<Place['source'], string> = {
+  google: 'Powered by Google',
+  tomtom: '© TomTom',
+  openstreetmap: '© OpenStreetMap contributors',
+};
+
 /** "Olive Garden, 2001 South Lamar Boulevard, Austin, Texas 78745" */
 function placeText(name: string, address: string) {
   const short = address.replace(/, USA$/, '');
@@ -33,7 +40,7 @@ function newSession() {
 
 /**
  * "Where are you going?": type a place, then pick the real address from the
- * matches (Google Places, or OpenStreetMap if the server has no Google key).
+ * matches (Google Places, TomTom or OpenStreetMap, whichever the server uses).
  * Picking one also saves where it is on the map, so your Circle can open it
  * in Google Maps. You can also keep what you typed.
  */
@@ -187,9 +194,7 @@ export function DestinationSearch({
           )}
           {results.length > 0 && (
             <ThemedText type="small" themeColor="textSecondary" style={styles.credit}>
-              {results[0].source === 'google'
-                ? 'Powered by Google'
-                : '© OpenStreetMap contributors'}
+              {CREDITS[results[0].source] ?? CREDITS.openstreetmap}
             </ThemedText>
           )}
         </View>
