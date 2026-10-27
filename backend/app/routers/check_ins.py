@@ -73,6 +73,9 @@ def start_or_update(body: CheckInIn, user: CurrentUser, db: Db) -> CheckInStarte
     # Only change what was sent (the +30m buttons send just the time).
     if "destination" in body.model_fields_set:
         check_in.destination = body.destination
+        has_place = body.destination is not None and body.destination_latitude is not None
+        check_in.destination_latitude = body.destination_latitude if has_place else None
+        check_in.destination_longitude = body.destination_longitude if has_place else None
     if "share_location" in body.model_fields_set and body.share_location is not None:
         check_in.share_location = body.share_location
         if not body.share_location:  # switched off: forget it straight away
@@ -107,6 +110,8 @@ def get_status(check_in_id: uuid.UUID, user: CurrentUser, db: Db) -> CheckInStat
         alerts_sent_at=c.alerts_sent_at,
         alerts_summary=c.alerts_summary,
         destination=c.destination,
+        destination_latitude=c.destination_latitude,
+        destination_longitude=c.destination_longitude,
         share_location=c.share_location,
         has_location=c.latitude is not None,
         has_photo=db.get(SessionPhoto, c.id) is not None,

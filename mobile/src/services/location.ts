@@ -1,5 +1,5 @@
 /**
- * Getting your location for SOS.
+ * Getting your location for SOS, and a rough one for the address search.
  *
  * We only ask for location "while the app is in use" and only when you press
  * SOS. No background tracking, in keeping with the app's privacy promise.
@@ -63,4 +63,24 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
     timer = setTimeout(() => reject(new Error('Timed out')), ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Roughly where you are, to show nearby places first in the address search.
+ * Never asks for permission: null unless location is already allowed.
+ */
+export async function getRoughLocation(): Promise<{ latitude: number; longitude: number } | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Location = require('expo-location') as typeof LocationTypes;
+    const { granted } = await Location.getForegroundPermissionsAsync();
+    if (!granted) return null;
+    const position =
+      (await Location.getLastKnownPositionAsync()) ??
+      (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low }));
+    if (!position) return null;
+    return { latitude: position.coords.latitude, longitude: position.coords.longitude };
+  } catch {
+    return null;
+  }
 }

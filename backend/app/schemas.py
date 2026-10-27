@@ -95,7 +95,11 @@ class CheckInIn(BaseModel):
     time_zone: str | None = Field(default=None, max_length=64)
     # Left out = keep what the active check-in already has (e.g. the Home
     # screen's +30m only moves the time).
-    destination: str | None = Field(default=None, max_length=120)
+    destination: str | None = Field(default=None, max_length=255)
+    # Set when the destination was picked from the address search (sent with
+    # destination; a typed destination has none).
+    destination_latitude: float | None = Field(default=None, ge=-90, le=90)
+    destination_longitude: float | None = Field(default=None, ge=-180, le=180)
     share_location: bool | None = None
 
     @field_validator("destination")
@@ -103,6 +107,15 @@ class CheckInIn(BaseModel):
     def _strip_destination(cls, value: str | None) -> str | None:
         value = (value or "").strip()
         return value or None
+
+
+class PlaceOut(BaseModel):
+    """One address search result, e.g. "Olive Garden" / "2001 S Lamar Blvd, Austin, TX"."""
+
+    name: str
+    address: str
+    latitude: float
+    longitude: float
 
 
 class LocationIn(BaseModel):
@@ -123,6 +136,8 @@ class CheckInStatusOut(BaseModel):
     alerts_sent_at: datetime | None
     alerts_summary: str | None
     destination: str | None = None
+    destination_latitude: float | None = None
+    destination_longitude: float | None = None
     share_location: bool = True
     has_location: bool = False
     has_photo: bool = False

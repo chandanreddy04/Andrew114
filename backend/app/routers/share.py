@@ -59,6 +59,13 @@ def _current_session(db: Db, user_id) -> CheckIn | None:
     )
 
 
+def _destination(check_in: CheckIn) -> str:
+    """Where they were going, with a map link if it was picked from the address search."""
+    place = alerts.maps_link(check_in.destination_latitude, check_in.destination_longitude)
+    on_map = f"<br><a href='{escape(place)}'>Open in Google Maps</a>" if place else ""
+    return f"<h2>Where they were going</h2><p>{escape(check_in.destination or '')}{on_map}</p>"
+
+
 def _sos_page(db: Db, sos: SosEvent, token: str) -> HTMLResponse:
     name = escape(alerts.display_name(db, sos.user_id))
     session = _current_session(db, sos.user_id)
@@ -69,7 +76,7 @@ def _sos_page(db: Db, sos: SosEvent, token: str) -> HTMLResponse:
         f"<p class='alert'>{name} pressed SOS at {when}.</p>",
     ]
     if session and session.destination:
-        rows.append(f"<h2>Where they were going</h2><p>{escape(session.destination)}</p>")
+        rows.append(_destination(session))
     location = alerts.maps_link(sos.latitude, sos.longitude)
     if location:
         rows.append(
@@ -111,7 +118,7 @@ def details_page(token: str, db: Db) -> HTMLResponse:
         f"<p class='alert'>{name} hasn't checked in. They expected to be back by {back_by}.</p>",
     ]
     if check_in.destination:
-        rows.append(f"<h2>Where they were going</h2><p>{escape(check_in.destination)}</p>")
+        rows.append(_destination(check_in))
     location = (
         alerts.maps_link(check_in.latitude, check_in.longitude) if check_in.share_location else None
     )

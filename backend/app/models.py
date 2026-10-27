@@ -153,7 +153,10 @@ class CheckIn(Base):
 
     # ----- Shared with your Circle only if an alert triggers -----
     # Where you said you're going, e.g. "Central Park".
-    destination: Mapped[str | None] = mapped_column(String(120))
+    destination: Mapped[str | None] = mapped_column(String(255))
+    # Where that is on the map, when it was picked from the address search.
+    destination_latitude: Mapped[float | None] = mapped_column(Float)
+    destination_longitude: Mapped[float | None] = mapped_column(Float)
     # Whether your last known location may be shared (the "Location" switch).
     share_location: Mapped[bool] = mapped_column(Boolean, default=True)
     latitude: Mapped[float | None] = mapped_column(Float)

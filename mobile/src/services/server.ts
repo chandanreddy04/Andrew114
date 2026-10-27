@@ -128,8 +128,31 @@ function timeZone(): string | null {
 // Home screen's +30m only moves the time).
 export type SessionDetails = {
   destination?: string;
+  // Where the destination is, if it was picked from the address search
+  // (sent with destination; null = typed by hand).
+  destinationPlace?: MapPosition | null;
   shareLocation?: boolean;
 };
+
+export type MapPosition = { latitude: number; longitude: number };
+
+// One address search result: "Olive Garden" / "2001 S Lamar Blvd, Austin, Texas".
+export type Place = MapPosition & { name: string; address: string };
+
+/**
+ * Real addresses matching what you typed (from OpenStreetMap, via the
+ * server). `near` puts places close to you first. Empty if nothing was found
+ * or the server can't be reached.
+ */
+export async function searchPlaces(query: string, near: MapPosition | null): Promise<Place[]> {
+  const params = new URLSearchParams({ q: query });
+  if (near) {
+    params.set('lat', String(near.latitude));
+    params.set('lng', String(near.longitude));
+  }
+  const result = await request<Place[]>('GET', `/v1/places?${params}`);
+  return result.ok ? result.data : [];
+}
 
 /**
  * Start a check-in on the server, or move the return time of the one that's
@@ -143,7 +166,13 @@ export async function startOrUpdateCheckIn(
   const result = await request<{ id: string }>('PUT', '/v1/check-ins/active', {
     return_by: returnBy.toISOString(),
     time_zone: timeZone(),
-    ...(details.destination !== undefined ? { destination: details.destination } : {}),
+    ...(details.destination !== undefined
+      ? {
+          destination: details.destination,
+          destination_latitude: details.destinationPlace?.latitude ?? null,
+          destination_longitude: details.destinationPlace?.longitude ?? null,
+        }
+      : {}),
     ...(details.shareLocation !== undefined ? { share_location: details.shareLocation } : {}),
   });
   if (!result.ok) {

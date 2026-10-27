@@ -55,6 +55,7 @@ import {
   verifyLoginCode,
   type EndCheckInResult,
   type EndSosResult,
+  type MapPosition,
   type ServerCheckIn,
   type SosResult,
 } from '@/services/server';
@@ -75,6 +76,7 @@ export type CheckIn = {
   server: ({ id: string } & Partial<ServerCheckIn> & Pick<ServerCheckIn, 'status'>) | null;
   // Shared with your Circle only if an alert triggers:
   destination: string | null; // "Central Park"
+  destinationPlace: MapPosition | null; // where it is, if picked from the address search
   shareLocation: boolean; // the "Location" switch
   locationShared: boolean; // the server has your last known location
   photoUri: string | null; // the outfit photo on this phone
@@ -97,6 +99,7 @@ export type ActiveSos = {
 // photo: a new picture's file, or null to remove it.
 export type SessionChoices = {
   destination?: string;
+  destinationPlace?: MapPosition | null;
   shareLocation?: boolean;
   photo?: string | null;
 };
@@ -186,6 +189,7 @@ async function loadCheckIn(): Promise<CheckIn | null> {
     returnBy: new Date(parsed.returnBy),
     server: parsed.server ?? null,
     destination: parsed.destination ?? null,
+    destinationPlace: parsed.destinationPlace ?? null,
     shareLocation: parsed.shareLocation ?? true,
     locationShared: parsed.locationShared ?? false,
     photoUri: parsed.photoUri ?? null,
@@ -300,6 +304,7 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
         if (!onServer) {
           const id = await startOrUpdateCheckIn(localCheckIn.returnBy, {
             destination: localCheckIn.destination ?? undefined,
+            destinationPlace: localCheckIn.destinationPlace,
             shareLocation: localCheckIn.shareLocation,
           });
           setCheckIn({ ...localCheckIn, server: id ? { id, status: 'active' } : null });
@@ -488,6 +493,7 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
       const previous = checkIn;
       const id = await startOrUpdateCheckIn(returnBy, {
         destination: choices.destination,
+        destinationPlace: choices.destinationPlace,
         shareLocation: choices.shareLocation,
       });
       const sameSession = id !== null && previous?.server?.id === id;
@@ -498,6 +504,10 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
         returnBy,
         server: id ? { ...(sameSession ? previous?.server : {}), id, status: 'active' } : null,
         destination: choices.destination ?? previous?.destination ?? null,
+        destinationPlace:
+          choices.destination !== undefined
+            ? (choices.destinationPlace ?? null)
+            : (previous?.destinationPlace ?? null),
         shareLocation,
         locationShared: sameSession && shareLocation ? (previous?.locationShared ?? false) : false,
         photoUri,

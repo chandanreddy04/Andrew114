@@ -46,6 +46,14 @@ removed (`+1 (555) 123-4567` → `+15551234567`).
 `return_by` is an ISO time with a zone, in the future, at most 7 days ahead.
 `status` is `active`, `safe` or `missed`.
 
+The PUT body can also carry `destination` (up to 255 characters), with
+`destination_latitude` / `destination_longitude` when it was picked from the
+address search (the Circle's page then links to it on a map).
+
+| Method | Path                          | Query                | Returns |
+| ------ | ----------------------------- | -------------------- | ------- |
+| GET    | `/v1/places`                  | `q` (3+ letters), `lat?`, `lng?` | `[{name, address, latitude, longitude}]`: up to 6 real addresses (OpenStreetMap via Photon), nearby first. Empty if the search service is down |
+
 ## SOS
 
 | Method | Path      | Body                                          | Returns |

@@ -12,8 +12,8 @@ import {
 } from 'react-native';
 
 import { BigButton } from '@/components/big-button';
+import { DestinationSearch } from '@/components/destination-search';
 import { PhotoViewer } from '@/components/photo-viewer';
-import { TextInput } from '@/components/text';
 import { TimeWheelPicker } from '@/components/time-wheel-picker';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -53,6 +53,8 @@ export default function CheckInScreen() {
   const theme = useTheme();
 
   const [destination, setDestination] = useState(checkIn?.destination ?? '');
+  // Where it is on the map, if picked from the address search.
+  const [destinationPlace, setDestinationPlace] = useState(checkIn?.destinationPlace ?? null);
   const [returnBy, setReturnBy] = useState(() => checkIn?.returnBy ?? defaultReturnTime());
   const [photoUri, setPhotoUri] = useState<string | null>(checkIn?.photoUri ?? null);
   const [shareLocation, setShareLocation] = useState(checkIn?.shareLocation ?? true);
@@ -135,6 +137,7 @@ export default function CheckInScreen() {
     const original = checkIn?.photoUri ?? null;
     const savedToServer = await startCheckIn(time, {
       destination: destination.trim(),
+      destinationPlace,
       shareLocation,
       // Only send the photo when it's new (or removed).
       photo: photoUri !== original ? photoUri : undefined,
@@ -200,18 +203,14 @@ export default function CheckInScreen() {
         <ThemedText type="smallBold" style={styles.label}>
           Where are you going?
         </ThemedText>
-        <View style={[styles.pill, styles.inputPill, field]}>
-          <Ionicons name="location-outline" size={22} color={theme.textSecondary} />
-          <TextInput
-            value={destination}
-            onChangeText={setDestination}
-            placeholder="e.g. Central Park"
-            placeholderTextColor={theme.textSecondary}
-            maxLength={120}
-            returnKeyType="done"
-            style={[styles.input, { color: theme.text }]}
-          />
-        </View>
+        <DestinationSearch
+          value={destination}
+          place={destinationPlace}
+          onChange={(text, place) => {
+            setDestination(text);
+            setDestinationPlace(place);
+          }}
+        />
       </View>
 
       {/* When will you be back? */}
@@ -379,14 +378,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  inputPill: {
-    gap: Spacing.three,
-  },
-  input: {
-    flex: 1,
-    fontSize: 18,
-    paddingVertical: Spacing.three,
   },
   timeRow: {
     flexDirection: 'row',

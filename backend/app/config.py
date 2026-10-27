@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     # (e.g. https://reached-api.onrender.com). Empty = no link in texts.
     public_base_url: str = ""
 
+    # ----- Address search (Start Session's "Where are you going?") -----
+    # Photon: free OpenStreetMap search, no key needed. Any Photon-compatible
+    # server works (e.g. a self-hosted one for heavy use).
+    places_url: str = "https://photon.komoot.io/api/"
+
     # Session data (destination, photo, location) is deleted this many days
     # after a session ends; "Keep 7 more days" adds the same again.
     session_data_days: int = 7

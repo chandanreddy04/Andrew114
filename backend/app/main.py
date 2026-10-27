@@ -22,7 +22,17 @@ from app.cache import get_redis
 from app.config import get_settings
 from app.db import engine
 from app.errors import bugsnag_enabled, configure_bugsnag
-from app.routers import auth, check_ins, client_errors, contacts, history, me, share, sos
+from app.routers import (
+    auth,
+    check_ins,
+    client_errors,
+    contacts,
+    history,
+    me,
+    places,
+    share,
+    sos,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 # httpx logs every request URL, which includes the Twilio account id.
@@ -50,7 +60,7 @@ if bugsnag_enabled():
 
     app.add_middleware(BugsnagMiddleware)
 
-for router in (auth, me, contacts, check_ins, sos, history, client_errors, share):
+for router in (auth, me, contacts, check_ins, sos, history, places, client_errors, share):
     app.include_router(router.router)
 
 
