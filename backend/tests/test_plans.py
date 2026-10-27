@@ -36,6 +36,20 @@ def test_basic_reader(text, destination, back_by):
     assert plan.problem is None
 
 
+@pytest.mark.parametrize(
+    ("text", "minutes"),
+    [
+        # The activity, then the trip back: both count.
+        ("Have lunch at Olive Garden for an hour and be back in 30 minutes after lunch.", 90),
+        ("Movie for 2 hours, takes 20 min to drive home", 140),
+        ("Hike for an hour and a half", 90),
+    ],
+)
+def test_basic_reader_adds_up_durations(text, minutes):
+    plan = read(text)
+    assert plan.return_by == EVENING + timedelta(minutes=minutes)
+
+
 def test_basic_reader_morning_time_means_tomorrow():
     plan = read("Hiking at Bear Mountain, back by 8am tomorrow")
     assert plan.return_by == datetime(2026, 10, 28, 8, 0, tzinfo=NY)

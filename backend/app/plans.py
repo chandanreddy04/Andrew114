@@ -92,8 +92,11 @@ Extract where they are going and when they expect to be back.
 "home around 11" as the next 11 o'clock that makes sense from the current local time and the \
 activity (late dinners mean PM). "noon" is 12:00, "midnight" is 00:00.
 - day: "tomorrow" only if they say tomorrow or the time is clearly the next day; otherwise "today".
-- minutes_from_now: for relative times ("for 2 hours", "back in 45 min"), the number of minutes; \
-otherwise null. Use either back_by_time or minutes_from_now, not both.
+- minutes_from_now: for relative times, the total minutes from now until they are back home, \
+or null. Add up every part of the plan that happens one after another: "lunch for an hour, \
+then back in 30 minutes" is 90; "movie for 2 hours and 20 min to drive home" is 140. A \
+too-early time makes the app alert their friends while they're still out, so when unsure, \
+count the longer reading. Use either back_by_time or minutes_from_now, not both.
 
 Never invent a time or place that isn't in the text."""
 
@@ -154,7 +157,9 @@ def ask_claude(text: str, now: datetime) -> dict | None:
 # ----- Built-in reader (no AI) -----
 
 _RELATIVE = re.compile(
-    r"\b(?:for|in)\s+(an?|half an|\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?|m)\b", re.I
+    r"\b(?:for|in|takes?|another|plus)\s+(an?|half an|\d+(?:\.\d+)?)\s*"
+    r"(hours?|hrs?|h|minutes?|mins?|m)\b(\s+and\s+a\s+half)?",
+    re.I,
 )
 _CLOCK = re.compile(
     r"\b(?:(?:back|home)\s+(?:by|at|around)|by|until|till|til|around|at)\s+"
@@ -177,11 +182,20 @@ def read_basic(text: str, now: datetime) -> dict:
     if re.search(r"\btomorrow\b", text, re.I):
         fields["day"] = "tomorrow"
 
-    relative = _RELATIVE.search(text)
-    if relative:
-        amount, unit = relative.group(1).lower(), relative.group(2).lower()
-        number = {"a": 1.0, "an": 1.0, "half an": 0.5}.get(amount) or float(amount)
-        fields["minutes_from_now"] = round(number * (60 if unit.startswith("h") else 1))
+    # Every duration counts, one after another: "lunch for an hour and back in
+    # 30 minutes after" is 90 minutes. Adding them up errs late, which is safer
+    # than alerting the Circle while you're still on your way.
+    durations = list(_RELATIVE.finditer(text))
+    relative = bool(durations)
+    if durations:
+        total = 0.0
+        for match in durations:
+            amount, unit = match.group(1).lower(), match.group(2).lower()
+            number = {"a": 1.0, "an": 1.0, "half an": 0.5}.get(amount) or float(amount)
+            if match.group(3):  # "an hour and a half"
+                number += 0.5
+            total += number * (60 if unit.startswith("h") else 1)
+        fields["minutes_from_now"] = round(total)
 
     clock = _CLOCK.search(text)
     if clock and not relative:
