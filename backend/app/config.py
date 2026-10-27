@@ -54,8 +54,12 @@ class Settings(BaseSettings):
     public_base_url: str = ""
 
     # ----- Address search (Start Session's "Where are you going?") -----
-    # Photon: free OpenStreetMap search, no key needed. Any Photon-compatible
-    # server works (e.g. a self-hosted one for heavy use).
+    # Google Places (the same search Google Maps, Uber and Lyft use). Needs a
+    # Google Cloud API key with "Places API (New)" turned on. Empty = use
+    # Photon below instead.
+    google_maps_api_key: str = ""
+    # Photon: free OpenStreetMap search, no key needed (fewer businesses and
+    # weaker at typos). Any Photon-compatible server works.
     places_url: str = "https://photon.komoot.io/api/"
 
     # Session data (destination, photo, location) is deleted this many days

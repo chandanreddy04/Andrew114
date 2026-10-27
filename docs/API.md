@@ -52,7 +52,10 @@ address search (the Circle's page then links to it on a map).
 
 | Method | Path                          | Query                | Returns |
 | ------ | ----------------------------- | -------------------- | ------- |
-| GET    | `/v1/places`                  | `q` (3+ letters), `lat?`, `lng?` | `[{name, address, latitude, longitude}]`: up to 6 real addresses (OpenStreetMap via Photon), nearby first. Empty if the search service is down |
+| GET    | `/v1/places`                  | `q` (3+ letters), `lat?`, `lng?`, `session?` | `[{name, address, latitude, longitude, place_id, source}]`: up to 6 real places, nearby first. Google Places when `GOOGLE_MAPS_API_KEY` is set (then without a position), otherwise OpenStreetMap via Photon. Empty if no search service can be reached |
+| GET    | `/v1/places/{place_id}`       | `session?`           | `{address, latitude, longitude, ...}` of a picked Google result. 404 if not found |
+
+`session` is one id per round of typing and picking, so Google bills it as a single search.
 
 ## SOS
 

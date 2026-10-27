@@ -7,21 +7,35 @@ import { ThemedText } from '@/components/themed-text';
 import { Brand, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { getRoughLocation } from '@/services/location';
-import { searchPlaces, type MapPosition, type Place } from '@/services/server';
+import {
+  fetchPlaceDetails,
+  searchPlaces,
+  type MapPosition,
+  type Place,
+} from '@/services/server';
 
 // Wait this long after the last letter before searching.
 const PAUSE_MS = 400;
 const MIN_LETTERS = 3;
 
 /** "Olive Garden, 2001 South Lamar Boulevard, Austin, Texas 78745" */
-function placeText(place: Place) {
-  return place.address ? `${place.name}, ${place.address}` : place.name;
+function placeText(name: string, address: string) {
+  const short = address.replace(/, USA$/, '');
+  if (!short || short === name) return name;
+  // An address result is already the whole address ("2001 S Lamar Blvd, Austin…").
+  return short.startsWith(name) ? short : `${name}, ${short}`;
+}
+
+// A new id for each round of typing and picking (Google bills it as one search).
+function newSession() {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 }
 
 /**
  * "Where are you going?": type a place, then pick the real address from the
- * matches (OpenStreetMap). Picking one also saves where it is on the map, so
- * your Circle can open it in Google Maps. You can also keep what you typed.
+ * matches (Google Places, or OpenStreetMap if the server has no Google key).
+ * Picking one also saves where it is on the map, so your Circle can open it
+ * in Google Maps. You can also keep what you typed.
  */
 export function DestinationSearch({
   value,
@@ -37,6 +51,9 @@ export function DestinationSearch({
   const [results, setResults] = useState<Place[]>([]);
   const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState(false);
+  // The result being looked up after a tap (Google gives its position then).
+  const [picking, setPicking] = useState<string | null>(null);
+  const session = useRef<string | null>(null);
 
   // Where you are (only if location is already allowed), for nearby places first.
   const near = useRef<MapPosition | null>(null);
@@ -54,7 +71,8 @@ export function DestinationSearch({
     const timer = setTimeout(async () => {
       const id = ++latest.current;
       setSearching(true);
-      const found = await searchPlaces(text, near.current);
+      session.current ??= newSession();
+      const found = await searchPlaces(text, near.current, session.current);
       if (id !== latest.current) return;
       setResults(found);
       setSearched(true);
@@ -72,12 +90,22 @@ export function DestinationSearch({
     onChange(text, null);
   }
 
-  function pick(picked: Place) {
+  async function pick(picked: Place) {
     latest.current++;
+    let { address, latitude, longitude } = picked;
+    if ((latitude === null || longitude === null) && picked.place_id) {
+      setPicking(picked.place_id);
+      const details = await fetchPlaceDetails(picked.place_id, session.current ?? newSession());
+      setPicking(null);
+      if (details) ({ address, latitude, longitude } = details);
+    }
+    session.current = null; // the next search is a new one
     setQuery('');
     setResults([]);
     setSearched(false);
-    onChange(placeText(picked), { latitude: picked.latitude, longitude: picked.longitude });
+    const position =
+      latitude !== null && longitude !== null ? { latitude, longitude } : null;
+    onChange(placeText(picked.name, address), position);
     Keyboard.dismiss();
   }
 
@@ -129,16 +157,21 @@ export function DestinationSearch({
           ) : (
             results.map((result, i) => (
               <Pressable
-                key={`${result.latitude},${result.longitude},${result.name}`}
+                key={result.place_id ?? `${result.latitude},${result.longitude},${result.name}`}
                 onPress={() => pick(result)}
+                disabled={picking !== null}
                 accessibilityRole="button"
-                accessibilityLabel={placeText(result)}
+                accessibilityLabel={placeText(result.name, result.address)}
                 style={({ pressed }) => [
                   styles.row,
                   i > 0 && { borderTopWidth: 1, borderTopColor: theme.border },
                   pressed && { backgroundColor: theme.backgroundSelected },
                 ]}>
-                <Ionicons name="location-outline" size={20} color={Brand.green} />
+                {picking !== null && picking === result.place_id ? (
+                  <ActivityIndicator color={Brand.green} />
+                ) : (
+                  <Ionicons name="location-outline" size={20} color={Brand.green} />
+                )}
                 <View style={styles.rowText}>
                   <ThemedText type="smallBold" numberOfLines={1}>
                     {result.name}
@@ -151,6 +184,13 @@ export function DestinationSearch({
                 </View>
               </Pressable>
             ))
+          )}
+          {results.length > 0 && (
+            <ThemedText type="small" themeColor="textSecondary" style={styles.credit}>
+              {results[0].source === 'google'
+                ? 'Powered by Google'
+                : '© OpenStreetMap contributors'}
+            </ThemedText>
           )}
         </View>
       )}
@@ -196,6 +236,12 @@ const styles = StyleSheet.create({
   },
   rowText: {
     flex: 1,
+  },
+  credit: {
+    fontSize: 12,
+    textAlign: 'right',
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.two,
   },
   message: {
     flexDirection: 'row',

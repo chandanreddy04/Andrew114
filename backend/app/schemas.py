@@ -114,8 +114,13 @@ class PlaceOut(BaseModel):
 
     name: str
     address: str
-    latitude: float
-    longitude: float
+    # Google results come without a position: ask GET /v1/places/{place_id}
+    # for it once one is picked.
+    latitude: float | None = None
+    longitude: float | None = None
+    place_id: str | None = None
+    # Who the result is from, for the credit under the list.
+    source: Literal["google", "openstreetmap"] = "openstreetmap"
 
 
 class LocationIn(BaseModel):

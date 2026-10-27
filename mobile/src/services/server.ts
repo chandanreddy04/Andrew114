@@ -136,22 +136,45 @@ export type SessionDetails = {
 
 export type MapPosition = { latitude: number; longitude: number };
 
-// One address search result: "Olive Garden" / "2001 S Lamar Blvd, Austin, Texas".
-export type Place = MapPosition & { name: string; address: string };
+// One address search result: "Olive Garden" / "2001 S Lamar Blvd, Austin, TX".
+// Google results have no position until fetchPlaceDetails is asked for it.
+export type Place = {
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  place_id: string | null;
+  source: 'google' | 'openstreetmap';
+};
 
 /**
- * Real addresses matching what you typed (from OpenStreetMap, via the
- * server). `near` puts places close to you first. Empty if nothing was found
- * or the server can't be reached.
+ * Real places and addresses matching what you typed (Google Places, or
+ * OpenStreetMap when the server has no Google key). `near` puts places close
+ * to you first. `session` ties one round of typing and picking together (for
+ * Google's billing). Empty if nothing was found or the server can't be reached.
  */
-export async function searchPlaces(query: string, near: MapPosition | null): Promise<Place[]> {
-  const params = new URLSearchParams({ q: query });
+export async function searchPlaces(
+  query: string,
+  near: MapPosition | null,
+  session: string,
+): Promise<Place[]> {
+  const params = new URLSearchParams({ q: query, session });
   if (near) {
     params.set('lat', String(near.latitude));
     params.set('lng', String(near.longitude));
   }
   const result = await request<Place[]>('GET', `/v1/places?${params}`);
   return result.ok ? result.data : [];
+}
+
+/** The full address and position of a picked Google result (null if it couldn't be found). */
+export async function fetchPlaceDetails(placeId: string, session: string): Promise<Place | null> {
+  const params = new URLSearchParams({ session });
+  const result = await request<Place>(
+    'GET',
+    `/v1/places/${encodeURIComponent(placeId)}?${params}`,
+  );
+  return result.ok ? result.data : null;
 }
 
 /**
