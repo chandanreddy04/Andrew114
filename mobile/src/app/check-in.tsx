@@ -232,7 +232,7 @@ export default function CheckInScreen() {
           <Pressable
             onPress={() => setPickingTime(true)}
             accessibilityRole="button"
-            accessibilityLabel={`Back by ${formatClock(returnBy)}. Tap to choose a time.`}
+            accessibilityLabel={`Be back by ${formatClock(returnBy)}. Tap to choose a time.`}
             style={[styles.pill, styles.timePill, field]}>
             <ThemedText style={styles.time}>{formatClock(returnBy)}</ThemedText>
           </Pressable>

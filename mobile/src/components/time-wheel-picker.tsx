@@ -40,7 +40,7 @@ function isTomorrow(date: Date) {
 }
 
 /**
- * "Back by" time chooser: scroll wheels for hour, minute (5-minute steps) and
+ * "Be back by" time chooser: scroll wheels for hour, minute (5-minute steps) and
  * AM/PM, opened by tapping the time on Start Session. Done is only allowed
  * between `earliest` and `latest` (timestamps).
  */
@@ -84,7 +84,7 @@ export function TimeWheelPicker({
             <ThemedText themeColor="textSecondary">Cancel</ThemedText>
           </Pressable>
           <ThemedText type="smallBold" style={styles.title}>
-            Back by
+            Be back by
           </ThemedText>
           <Pressable
             onPress={() => onDone(chosen)}
