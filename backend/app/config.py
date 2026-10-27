@@ -46,6 +46,14 @@ class Settings(BaseSettings):
     # ----- Errors (Bugsnag) -----
     bugsnag_api_key: str = ""
 
+    # ----- AI (Claude) -----
+    # Reads plans typed in plain words on Start Session ("Dinner at Olive
+    # Garden, back by 11"). Empty = a simple built-in reader is used instead.
+    anthropic_api_key: str = ""
+    ai_model: str = "claude-opus-5-5"
+    # Seconds to wait for Claude before falling back to the built-in reader.
+    ai_timeout_seconds: float = 15.0
+
     # Browsers allowed to call the API (the Expo web preview). "*" = any.
     cors_origins: str = "*"
 

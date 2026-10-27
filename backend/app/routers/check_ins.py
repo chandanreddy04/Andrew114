@@ -18,8 +18,8 @@ from fastapi import APIRouter, HTTPException, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app import alerts, tasks
-from app.cache import clear_history_cache
+from app import alerts, plans, tasks
+from app.cache import clear_history_cache, hit_rate_limit
 from app.config import get_settings
 from app.deps import CurrentUser, Db
 from app.models import CheckIn, SessionPhoto, utcnow
@@ -31,11 +31,33 @@ from app.schemas import (
     ConfirmSafeOut,
     KeepOut,
     LocationIn,
+    PlanIn,
+    PlanOut,
 )
 
 router = APIRouter(prefix="/v1/check-ins", tags=["check-ins"])
 
 MAX_LENGTH = timedelta(days=7)
+
+
+@router.post("/plan")
+def read_plan(body: PlanIn, user: CurrentUser) -> PlanOut:
+    """
+    Read a plan typed in plain words ("Dinner at Olive Garden, back by 11")
+    into a destination and return time. Nothing is started: the app fills in
+    the Start Session form for you to check.
+    """
+    if body.now.tzinfo is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "now needs a time zone")
+    if hit_rate_limit(f"plan:{user.id}", 30, 600):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many tries. Fill it in below.")
+    plan = plans.read_plan(body.text, body.now, body.time_zone)
+    return PlanOut(
+        destination=plan.destination,
+        return_by=plan.return_by,
+        problem=plan.problem,
+        source=plan.source,
+    )
 
 
 @router.put("/active")

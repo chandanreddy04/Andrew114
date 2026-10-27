@@ -171,6 +171,23 @@ class HistoryCheckIn(BaseModel):
     all_clear_summary: str | None
 
 
+class PlanIn(BaseModel):
+    # e.g. "Dinner at Olive Garden on Main St, back by 11"
+    text: str = Field(min_length=1, max_length=300)
+    # The phone's current local time, with its UTC offset.
+    now: datetime
+    time_zone: str | None = Field(default=None, max_length=64)
+
+
+class PlanOut(BaseModel):
+    destination: str | None
+    return_by: datetime | None
+    # Why there's no return time, to show under the box.
+    problem: str | None
+    # "ai" (read by Claude) or "basic" (the built-in reader).
+    source: Literal["ai", "basic"]
+
+
 class KeepOut(BaseModel):
     delete_after: datetime
 

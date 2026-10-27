@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
@@ -21,6 +22,7 @@ import { Brand, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { askNotificationPermission } from '@/services/notifications';
 import { choosePhoto } from '@/services/photos';
+import { readPlan } from '@/services/server';
 import { useSafety } from '@/state/safety-store';
 import { inShownOrder } from '@/utils/alert';
 import { formatClock } from '@/utils/time';
@@ -70,6 +72,33 @@ export default function CheckInScreen() {
   const latest = now + MAX_AHEAD_MINUTES * MINUTE;
   const canEarlier = returnBy.getTime() - STEP_MINUTES * MINUTE >= earliest;
   const canLater = returnBy.getTime() + STEP_MINUTES * MINUTE <= latest;
+
+  // "Describe your plans": typed in plain words, read by the server, and
+  // used to fill in the form below for you to check.
+  const [plan, setPlan] = useState('');
+  const [reading, setReading] = useState(false);
+  const [planNote, setPlanNote] = useState<{ text: string; problem: boolean } | null>(null);
+
+  async function fillFromPlan() {
+    if (!plan.trim() || reading) return;
+    setReading(true);
+    setPlanNote(null);
+    const result = await readPlan(plan.trim());
+    setReading(false);
+    if (!result.ok) {
+      setPlanNote({ text: result.error, problem: true });
+      return;
+    }
+    if (result.destination) setDestination(result.destination);
+    if (result.returnBy) setReturnBy(result.returnBy);
+    if (result.problem) {
+      setPlanNote({ text: result.problem, problem: true });
+    } else if (!result.destination) {
+      setPlanNote({ text: 'Time filled in below. Add where you’re going if you like.', problem: false });
+    } else {
+      setPlanNote({ text: 'Filled in below. Check it, then start your session.', problem: false });
+    }
+  }
 
   // The scroll-wheel time picker (opened by tapping the time).
   const [pickingTime, setPickingTime] = useState(false);
@@ -193,6 +222,50 @@ export default function CheckInScreen() {
           {checkIn ? 'Change Session' : 'Start Session'}
         </ThemedText>
         <View style={styles.headerSide} />
+      </View>
+
+      {/* Describe your plans in plain words; it fills in the form below. */}
+      <View style={styles.section}>
+        <ThemedText type="smallBold" style={styles.label}>
+          Describe your plans
+        </ThemedText>
+        <View style={[styles.planBox, field]}>
+          <TextInput
+            value={plan}
+            onChangeText={(text) => {
+              setPlan(text);
+              setPlanNote(null);
+            }}
+            placeholder="e.g. Dinner at Olive Garden on Main St, back by 11"
+            placeholderTextColor={theme.textSecondary}
+            multiline
+            maxLength={300}
+            accessibilityLabel="Describe your plans"
+            style={[styles.planInput, { color: theme.text }]}
+          />
+          <Pressable
+            onPress={fillFromPlan}
+            disabled={!plan.trim() || reading}
+            accessibilityRole="button"
+            accessibilityLabel="Fill in the form from your plans"
+            style={[styles.fillButton, (!plan.trim() || reading) && styles.dimmed]}>
+            {reading ? (
+              <ActivityIndicator size="small" color={Brand.onColor} />
+            ) : (
+              <Ionicons name="sparkles-outline" size={18} color={Brand.onColor} />
+            )}
+            <ThemedText type="smallBold" style={{ color: Brand.onColor }}>
+              {reading ? 'Reading…' : 'Fill in'}
+            </ThemedText>
+          </Pressable>
+        </View>
+        {planNote && (
+          <ThemedText
+            type="small"
+            style={{ color: planNote.problem ? Brand.red : theme.textSecondary }}>
+            {planNote.text}
+          </ThemedText>
+        )}
       </View>
 
       {/* Where are you going? */}
@@ -379,6 +452,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  planBox: {
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
+  planInput: {
+    fontSize: 17,
+    minHeight: 56,
+    textAlignVertical: 'top',
+  },
+  fillButton: {
+    alignSelf: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    backgroundColor: Brand.green,
+    borderRadius: 999,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
   },
   inputPill: {
     gap: Spacing.three,

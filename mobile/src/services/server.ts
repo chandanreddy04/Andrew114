@@ -153,6 +153,42 @@ export async function startOrUpdateCheckIn(
   return result.data.id;
 }
 
+// A plan typed in plain words, read by the server (Claude, or a simple
+// built-in reader): where you're going and when you'll be back.
+export type ReadPlan =
+  | { ok: true; destination: string | null; returnBy: Date | null; problem: string | null }
+  | { ok: false; error: string };
+
+// The phone's local time with its UTC offset, e.g. "2026-10-27T18:05:00-04:00".
+function localTimeWithOffset(date: Date): string {
+  const offset = -date.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  const pad = (n: number) => String(Math.floor(Math.abs(n))).padStart(2, '0');
+  const local = new Date(date.getTime() + offset * 60 * 1000).toISOString().slice(0, 19);
+  return `${local}${sign}${pad(offset / 60)}:${pad(offset % 60)}`;
+}
+
+/** "Dinner at Olive Garden, back by 11" -> destination and return time. Starts nothing. */
+export async function readPlan(text: string): Promise<ReadPlan> {
+  const result = await request<{
+    destination: string | null;
+    return_by: string | null;
+    problem: string | null;
+  }>('POST', '/v1/check-ins/plan', {
+    text,
+    now: localTimeWithOffset(new Date()),
+    time_zone: timeZone(),
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: result.status === 0 ? "Couldn't reach the server. Fill it in below." : result.error,
+    };
+  }
+  const { destination, return_by, problem } = result.data;
+  return { ok: true, destination, returnBy: return_by ? new Date(return_by) : null, problem };
+}
+
 /** Your last known location for this session (shared only if an alert triggers). */
 export async function updateCheckInLocation(
   id: string,
