@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { BigButton } from '@/components/big-button';
 import { Screen } from '@/components/screen';
+import { TextInput } from '@/components/text';
 import { ThemedText } from '@/components/themed-text';
 import Ionicons from '@expo/vector-icons/Ionicons';
 

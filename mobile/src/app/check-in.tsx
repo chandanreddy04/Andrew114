@@ -8,12 +8,12 @@ import {
   Pressable,
   StyleSheet,
   Switch,
-  TextInput,
   View,
 } from 'react-native';
 
 import { BigButton } from '@/components/big-button';
 import { PhotoViewer } from '@/components/photo-viewer';
+import { TextInput } from '@/components/text';
 import { TimeWheelPicker } from '@/components/time-wheel-picker';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';

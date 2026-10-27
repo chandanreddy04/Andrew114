@@ -8,13 +8,13 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  TextInput,
   View,
 } from 'react-native';
 
 import { BigButton } from '@/components/big-button';
 import { PhotoViewer } from '@/components/photo-viewer';
 import { Screen } from '@/components/screen';
+import { TextInput } from '@/components/text';
 import { ThemedText } from '@/components/themed-text';
 import { Brand, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';

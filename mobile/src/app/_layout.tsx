@@ -1,3 +1,4 @@
+import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, ThemeProvider, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -8,6 +9,7 @@ import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
 import { LoginScreen } from '@/components/login-screen';
 import { SosCountdownOverlay } from '@/components/sos-countdown';
+import { appFonts } from '@/components/text';
 import { WelcomeScreens } from '@/components/welcome-screens';
 import { send as sendErrorReport, setUpErrorReporting } from '@/services/error-reporting';
 import { SafetyProvider, useSafety } from '@/state/safety-store';
@@ -17,6 +19,11 @@ setUpErrorReporting();
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  // The app font (Google Sans Flex). The splash screen stays up until it's ready;
+  // if it can't load, the phone's own font is used instead.
+  const [fontsLoaded, fontError] = useFonts(appFonts);
+  if (!fontsLoaded && !fontError) return null;
+
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       {/* SafetyProvider shares login, check-in and contacts with every screen. */}

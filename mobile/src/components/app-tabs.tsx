@@ -7,13 +7,13 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   ToastAndroid,
   Vibration,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Text } from '@/components/text';
 import { Brand } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useSafety } from '@/state/safety-store';

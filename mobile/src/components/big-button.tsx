@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Brand, brandGradientStyle, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
