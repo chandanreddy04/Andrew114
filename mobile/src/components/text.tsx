@@ -5,12 +5,11 @@ import {
   GoogleSansFlex_700Bold,
   GoogleSansFlex_800ExtraBold,
 } from '@expo-google-fonts/google-sans-flex';
-import { forwardRef } from 'react';
+import { type ComponentProps } from 'react';
 import {
   StyleSheet,
   Text as RNText,
   TextInput as RNTextInput,
-  type TextInputProps,
   type TextProps,
   type TextStyle,
 } from 'react-native';
@@ -43,14 +42,11 @@ function withAppFont(style: TextProps['style']) {
 }
 
 /** React Native's Text, in the app font (Google Sans Flex). */
-export const Text = forwardRef<RNText, TextProps>(function Text({ style, ...rest }, ref) {
-  return <RNText ref={ref} style={withAppFont(style)} {...rest} />;
-});
+export function Text({ style, ...rest }: ComponentProps<typeof RNText>) {
+  return <RNText style={withAppFont(style)} {...rest} />;
+}
 
 /** React Native's TextInput, in the app font (Google Sans Flex). */
-export const TextInput = forwardRef<RNTextInput, TextInputProps>(function TextInput(
-  { style, ...rest },
-  ref,
-) {
-  return <RNTextInput ref={ref} style={withAppFont(style)} {...rest} />;
-});
+export function TextInput({ style, ...rest }: ComponentProps<typeof RNTextInput>) {
+  return <RNTextInput style={withAppFont(style)} {...rest} />;
+}

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { type ComponentRef, useRef, useState } from 'react';
 import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -138,7 +138,7 @@ function Wheel({
   label: string;
 }) {
   const theme = useTheme();
-  const scroller = useRef<ScrollView>(null);
+  const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
   const positioned = useRef(false);
 
   function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {

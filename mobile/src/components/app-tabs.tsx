@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, Tabs } from 'expo-router';
-import type { BottomTabBarButtonProps } from 'expo-router/build/react-navigation/bottom-tabs';
+import type { BottomTabBarButtonProps } from 'expo-router/tabs';
 import { type ComponentProps, useEffect, useRef } from 'react';
 import {
   type ColorValue,
@@ -107,17 +107,21 @@ export default function AppTabs() {
         options={{ title: 'Settings', tabBarIcon: tabIcon('settings', 'settings-outline') }}
       />
 
-      {/* Real screens, but not shown as tabs. */}
-      <Tabs.Screen name="check-in" options={{ href: null }} />
-      <Tabs.Screen name="history" options={{ href: null }} />
+      {/* Real screens, but not shown as tabs. (Not `href: null`: since
+          SDK 58 that makes the screen unreachable.) */}
+      <Tabs.Screen name="check-in" options={hiddenTab} />
+      <Tabs.Screen name="history" options={hiddenTab} />
       {/* Edit Profile fills the screen, like the design (no tab bar). */}
       <Tabs.Screen
         name="edit-profile"
-        options={{ href: null, tabBarStyle: { display: 'none' } }}
+        options={{ ...hiddenTab, tabBarStyle: { display: 'none' } }}
       />
     </Tabs>
   );
 }
+
+// A screen with no button (and no space) in the tab bar.
+const hiddenTab = { tabBarButton: () => null, tabBarItemStyle: { display: 'none' as const } };
 
 const SOS_SIZE = 72;
 
