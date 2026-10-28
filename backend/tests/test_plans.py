@@ -1,8 +1,10 @@
 """Starting a session in plain words: the built-in reader, the Claude path and the endpoint."""
 
+import json as jsonlib
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import httpx
 import pytest
 
 from app import plans
@@ -95,6 +97,94 @@ def test_claude_fields_are_used(monkeypatch):
 def test_claude_not_used_without_key(monkeypatch):
     monkeypatch.setattr(get_settings(), "anthropic_api_key", "")
     assert plans.ask_claude("back by 11", EVENING) is None
+
+
+def ollama_answers(monkeypatch, parts: dict) -> dict:
+    """Pretend Ollama copied these parts out of the plan; returns what was sent to it."""
+    sent: dict = {}
+
+    def fake_post(url, json, timeout):
+        sent.update(url=url, body=json)
+        return httpx.Response(
+            200,
+            json={"message": {"role": "assistant", "content": jsonlib.dumps(parts)}},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(get_settings(), "ai_provider", "ollama")
+    monkeypatch.setattr(plans.httpx, "post", fake_post)
+    return sent
+
+
+def test_ollama_durations_are_added_up(monkeypatch):
+    sent = ollama_answers(
+        monkeypatch,
+        {"destination": "Olive Garden", "back_by": None, "durations": [60, 30], "tomorrow": False},
+    )
+    plan = read("Lunch at Olive Garden for an hour, back in 30 minutes after")
+    assert plan.source == "ai"
+    assert plan.destination == "Olive Garden"
+    assert plan.return_by == EVENING + timedelta(minutes=90)
+    assert sent["url"] == "http://localhost:11434/api/chat"
+    assert sent["body"]["model"] == "llama3.2"
+    assert sent["body"]["format"] == plans.OLLAMA_SCHEMA
+
+
+@pytest.mark.parametrize(
+    ("text", "back_by", "tomorrow", "expected"),
+    [
+        # No am/pm: the next 11.
+        ("Gym, back by 11", "11:00", False, datetime(2026, 10, 27, 23, 0, tzinfo=NY)),
+        ("Gym, home by 7:30pm", "7:30pm", False, datetime(2026, 10, 27, 19, 30, tzinfo=NY)),
+        ("Hike, back 8am tomorrow", "8:00am", True, datetime(2026, 10, 28, 8, 0, tzinfo=NY)),
+        ("Bar, home at quarter to 11", "10:45", False, datetime(2026, 10, 27, 22, 45, tzinfo=NY)),
+    ],
+)
+def test_ollama_clock_times(monkeypatch, text, back_by, tomorrow, expected):
+    ollama_answers(
+        monkeypatch,
+        {"destination": "the gym", "back_by": back_by, "durations": [], "tomorrow": tomorrow},
+    )
+    assert read(text).return_by == expected
+
+
+def test_time_the_ai_missed_comes_from_the_basic_reader(monkeypatch):
+    ollama_answers(
+        monkeypatch,
+        {"destination": "Blue Bottle", "back_by": None, "durations": [], "tomorrow": False},
+    )
+    plan = read("Coffee at Blue Bottle, back around noon", datetime(2026, 10, 27, 9, 0, tzinfo=NY))
+    assert plan.source == "ai"
+    assert plan.destination == "Blue Bottle"
+    assert plan.return_by == datetime(2026, 10, 27, 12, 0, tzinfo=NY)
+
+
+def test_ollama_made_up_times_are_ignored(monkeypatch):
+    # The model answered an hour and 9 pm, but the plan has neither.
+    ollama_answers(
+        monkeypatch,
+        {"destination": "the library", "back_by": "9:00pm", "durations": [60], "tomorrow": False},
+    )
+    plan = read("Going to the library")
+    assert plan.destination == "the library"
+    assert plan.return_by is None and "when you'll be back" in plan.problem
+
+
+def test_ollama_not_running_uses_basic_reader(monkeypatch):
+    def refused(url, json, timeout):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(get_settings(), "ai_provider", "ollama")
+    monkeypatch.setattr(plans.httpx, "post", refused)
+    plan = read("Dinner at Olive Garden, back by 11")
+    assert plan.source == "basic"
+    assert plan.return_by == datetime(2026, 10, 27, 23, 0, tzinfo=NY)
+
+
+def test_no_ai(monkeypatch):
+    monkeypatch.setattr(get_settings(), "ai_provider", "none")
+    monkeypatch.setattr(plans, "ask_claude", lambda text, now: pytest.fail("Claude was asked"))
+    assert read("Dinner at Olive Garden, back by 11").source == "basic"
 
 
 def test_plan_endpoint(client, user):

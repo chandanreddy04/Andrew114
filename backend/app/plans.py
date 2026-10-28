@@ -2,10 +2,11 @@
 Start a session in plain words: "Dinner at Olive Garden on Main St, back by 11"
 becomes a destination ("Olive Garden on Main St") and a return time (11:00 PM).
 
-Claude reads the text when ANTHROPIC_API_KEY is set. Without a key, or if
-Claude is slow or fails, a simple built-in reader is used, so this never
-blocks starting a session. Nothing is started here: the app fills in the
-Start Session form and you confirm it.
+An AI reads the text: Claude (AI_PROVIDER=claude, with ANTHROPIC_API_KEY set)
+or a free model on this computer through Ollama (AI_PROVIDER=ollama). Without
+one, or if it is slow or fails, a simple built-in reader is used, so this
+never blocks starting a session. Nothing is started here: the app fills in
+the Start Session form and you confirm it.
 """
 
 import json
@@ -16,6 +17,7 @@ from datetime import datetime, time, timedelta, tzinfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import anthropic
+import httpx
 
 from app.config import get_settings
 
@@ -24,6 +26,7 @@ log = logging.getLogger(__name__)
 # Same limits as the Start Session screen.
 EARLIEST = timedelta(minutes=5)
 LATEST = timedelta(hours=24)
+TIME_FIELDS = ("back_by_time", "minutes_from_now", "day")
 
 
 @dataclass
@@ -38,11 +41,15 @@ class Plan:
 def read_plan(text: str, now: datetime, time_zone: str | None = None) -> Plan:
     """`now` is the phone's local time (with its UTC offset)."""
     now = now.astimezone(_zone(time_zone, now))
-    fields = ask_claude(text, now)
+    fields = ask_ai(text, now)
     source = "ai"
+    basic = read_basic(text, now)
     if fields is None:
-        fields = read_basic(text, now)
+        fields = basic
         source = "basic"
+    elif not fields.get("minutes_from_now") and not fields.get("back_by_time"):
+        # The AI missed the time but the built-in reader found one ("around noon").
+        fields = {**fields, **{key: basic.get(key) for key in TIME_FIELDS}}
     return_by, problem = _return_time(fields, now)
     destination = (fields.get("destination") or "").strip()[:120] or None
     return Plan(destination, return_by, problem, source)
@@ -81,7 +88,7 @@ def _return_time(fields: dict, now: datetime) -> tuple[datetime | None, str | No
     return when, None
 
 
-# ----- Claude -----
+# ----- AI -----
 
 SYSTEM = """You read short plans typed into a personal safety app before someone heads out. \
 Extract where they are going and when they expect to be back.
@@ -113,6 +120,28 @@ SCHEMA = {
 }
 
 
+def ask_ai(text: str, now: datetime) -> dict | None:
+    """The fields the chosen AI reads from the text, or None to use the built-in reader."""
+    provider = get_settings().ai_provider.strip().lower()
+    if provider == "claude":
+        return ask_claude(text, now)
+    if provider == "ollama":
+        return ask_ollama(text, now)
+    return None
+
+
+def _question(text: str, now: datetime) -> str:
+    return f"Current local time: {now:%A %Y-%m-%d %H:%M}\n\nPlan: <plan>{text}</plan>"
+
+
+def _fields(answer: str) -> dict | None:
+    try:
+        fields = json.loads(answer)
+    except json.JSONDecodeError:
+        return None
+    return fields if isinstance(fields, dict) else None
+
+
 def ask_claude(text: str, now: datetime) -> dict | None:
     """The fields Claude reads from the text, or None (no key, slow, or failed)."""
     settings = get_settings()
@@ -128,13 +157,7 @@ def ask_claude(text: str, now: datetime) -> dict | None:
             model=settings.ai_model,
             max_tokens=2000,
             system=SYSTEM,
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"Current local time: {now:%A %Y-%m-%d %H:%M}\n\n"
-                    f"Plan: <plan>{text}</plan>",
-                }
-            ],
+            messages=[{"role": "user", "content": _question(text, now)}],
             output_config={"effort": "low", "format": {"type": "json_schema", "schema": SCHEMA}},
             # If the model declines, the API retries on its recommended fallback.
             betas=["server-side-fallback-2026-07-01"],
@@ -147,11 +170,97 @@ def ask_claude(text: str, now: datetime) -> dict | None:
         log.warning("Claude stopped with %s; using the basic reader", response.stop_reason)
         return None
     answer = next((block.text for block in response.content if block.type == "text"), "")
+    return _fields(answer)
+
+
+# Small models on a laptop copy words out well but get sums and am/pm wrong,
+# so they only copy the parts out; the adding up and am/pm are done here.
+OLLAMA_SYSTEM = """Copy the parts of a short plan someone typed before heading out, as JSON.
+
+- destination: the place they are going, in their words ("Joe's Pizza", "the park"). \
+No activity, no time. null if no place.
+- back_by: the clock time they will be back by, as "H:MM", adding "am" or "pm" only if \
+they wrote it. "quarter to" a time is 15 minutes before it, "noon" is "12:00pm", \
+"midnight" is "12:00am". null if the plan has no clock time.
+- durations: each length of time written in the plan ("for an hour", "in 20 min"), \
+converted to minutes, in order. [] if the plan has none.
+- tomorrow: true only if they say tomorrow.
+
+Only copy what is written in the plan. Never invent a time or a duration."""
+
+OLLAMA_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "destination": {"type": ["string", "null"]},
+        "back_by": {"type": ["string", "null"]},
+        "durations": {"type": "array", "items": {"type": "integer"}},
+        "tomorrow": {"type": "boolean"},
+    },
+    "required": ["destination", "back_by", "durations", "tomorrow"],
+}
+
+
+def ask_ollama(text: str, now: datetime) -> dict | None:
+    """The fields a model in Ollama reads from the text, or None (not running, slow, or failed)."""
+    settings = get_settings()
     try:
-        fields = json.loads(answer)
-    except json.JSONDecodeError:
+        response = httpx.post(
+            f"{settings.ollama_url.rstrip('/')}/api/chat",
+            json={
+                "model": settings.ollama_model,
+                "messages": [
+                    {"role": "system", "content": OLLAMA_SYSTEM},
+                    {"role": "user", "content": f"<plan>{text}</plan>"},
+                ],
+                "stream": False,
+                # Ollama keeps the answer to this JSON shape.
+                "format": OLLAMA_SCHEMA,
+                "options": {"temperature": 0},
+                # Keep the model loaded between plans; loading it takes a while.
+                "keep_alive": "30m",
+            },
+            timeout=settings.ollama_timeout_seconds,
+        )
+        response.raise_for_status()
+        parts = _fields(response.json()["message"]["content"])
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as error:
+        log.warning("Ollama couldn't read the plan (%s); using the basic reader", error)
         return None
-    return fields if isinstance(fields, dict) else None
+    return _from_parts(parts, text, now) if parts else None
+
+
+_DURATION_WORDS = re.compile(r"\b(hours?|hrs?|minutes?|mins?)\b", re.I)
+_CLOCK_WORDS = re.compile(r"\b(noon|midnight|quarter|half past)\b", re.I)
+
+
+def _from_parts(parts: dict, text: str, now: datetime) -> dict:
+    """The model's copied-out parts, turned into the same fields Claude gives.
+
+    Small models sometimes make up a time, so a duration only counts if the
+    plan mentions hours or minutes, and a clock time only if its hour is written.
+    """
+    destination = parts.get("destination")
+    fields: dict = {
+        "destination": destination if isinstance(destination, str) else None,
+        "back_by_time": None,
+        "day": "tomorrow" if parts.get("tomorrow") is True else "today",
+    }
+    durations = parts.get("durations")
+    if isinstance(durations, list) and _DURATION_WORDS.search(text):
+        total = sum(d for d in durations if isinstance(d, int | float) and d > 0)
+        if total:
+            fields["minutes_from_now"] = round(total)
+            return fields
+    clock = re.fullmatch(
+        r"\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\s*",
+        str(parts.get("back_by") or ""),
+        re.I,
+    )
+    if clock and (
+        str(int(clock.group(1))) in re.findall(r"\d+", text) or _CLOCK_WORDS.search(text)
+    ):
+        fields["back_by_time"] = _clock(clock.group(1), clock.group(2), clock.group(3), now)
+    return fields
 
 
 # ----- Built-in reader (no AI) -----
@@ -199,17 +308,12 @@ def read_basic(text: str, now: datetime) -> dict:
 
     clock = _CLOCK.search(text)
     if clock and not relative:
-        hour = int(clock.group(1) or clock.group(4))
-        minute = int(clock.group(2) or clock.group(5) or 0)
-        suffix = (clock.group(3) or clock.group(6) or "").lower().replace(".", "")
-        if suffix == "pm" and hour < 12:
-            hour += 12
-        elif suffix == "am" and hour == 12:
-            hour = 0
-        elif not suffix and hour <= 12:
-            hour = _nearest_hour(hour, minute, now)
-        if hour <= 23 and minute <= 59:
-            fields["back_by_time"] = f"{hour:02d}:{minute:02d}"
+        fields["back_by_time"] = _clock(
+            clock.group(1) or clock.group(4),
+            clock.group(2) or clock.group(5),
+            clock.group(3) or clock.group(6),
+            now,
+        )
     elif not relative:
         word = re.search(r"\b(noon|midnight)\b", text, re.I)
         if word:
@@ -219,6 +323,23 @@ def read_basic(text: str, now: datetime) -> dict:
     if place:
         fields["destination"] = place.group(1).strip()
     return fields
+
+
+def _clock(
+    hour_text: str, minute_text: str | None, suffix: str | None, now: datetime
+) -> str | None:
+    """'7', '30', 'pm' -> '19:30'. With no am/pm, whichever comes next. None if not a time."""
+    hour, minute = int(hour_text), int(minute_text or 0)
+    suffix = (suffix or "").lower().replace(".", "")
+    if suffix == "pm" and hour < 12:
+        hour += 12
+    elif suffix == "am" and hour == 12:
+        hour = 0
+    elif not suffix and hour <= 12:
+        hour = _nearest_hour(hour, minute, now)
+    if hour > 23 or minute > 59:
+        return None
+    return f"{hour:02d}:{minute:02d}"
 
 
 def _nearest_hour(hour: int, minute: int, now: datetime) -> int:

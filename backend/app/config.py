@@ -46,13 +46,20 @@ class Settings(BaseSettings):
     # ----- Errors (Bugsnag) -----
     bugsnag_api_key: str = ""
 
-    # ----- AI (Claude) -----
+    # ----- AI -----
     # Reads plans typed in plain words on Start Session ("Dinner at Olive
-    # Garden, back by 11"). Empty = a simple built-in reader is used instead.
+    # Garden, back by 11"). "claude" (needs ANTHROPIC_API_KEY), "ollama" (a
+    # free model running on this computer), or "none". Whenever the AI isn't
+    # available, a simple built-in reader is used instead.
+    ai_provider: str = "claude"
     anthropic_api_key: str = ""
     ai_model: str = "claude-opus-5-5"
-    # Seconds to wait for Claude before falling back to the built-in reader.
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2"
+    # Seconds to wait for the AI before falling back to the built-in reader.
+    # Models on a laptop are slower, and the first plan also loads the model.
     ai_timeout_seconds: float = 15.0
+    ollama_timeout_seconds: float = 45.0
 
     # Browsers allowed to call the API (the Expo web preview). "*" = any.
     cors_origins: str = "*"
