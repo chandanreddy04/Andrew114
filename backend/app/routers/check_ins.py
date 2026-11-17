@@ -57,6 +57,7 @@ def read_plan(body: PlanIn, user: CurrentUser) -> PlanOut:
         return_by=plan.return_by,
         problem=plan.problem,
         source=plan.source,
+        choices=plan.choices,
     )
 
 

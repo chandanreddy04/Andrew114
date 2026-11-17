@@ -184,8 +184,11 @@ class PlanOut(BaseModel):
     return_by: datetime | None
     # Why there's no return time, to show under the box.
     problem: str | None
-    # "ai" (read by Claude) or "basic" (the built-in reader).
+    # "ai" (read by the AI) or "basic" (the built-in reader).
     source: Literal["ai", "basic"]
+    # When the time could be AM or PM: both, for you to pick (return_by is
+    # then empty and problem asks "Did you mean ...?").
+    choices: list[datetime] = []
 
 
 class KeepOut(BaseModel):

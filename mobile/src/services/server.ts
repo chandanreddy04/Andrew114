@@ -153,11 +153,21 @@ export async function startOrUpdateCheckIn(
   return result.data.id;
 }
 
-// A plan typed in plain words, read by the server (Claude, or a simple
-// built-in reader): where you're going and when you'll be back.
+// A plan typed in plain words, read by the server (an AI, or a simple
+// built-in reader): where you're going and when you'll be back. When the
+// time could be AM or PM, `choices` has both for you to pick.
 export type ReadPlan =
-  | { ok: true; destination: string | null; returnBy: Date | null; problem: string | null }
+  | {
+      ok: true;
+      destination: string | null;
+      returnBy: Date | null;
+      problem: string | null;
+      choices: Date[];
+    }
   | { ok: false; error: string };
+
+// Reading a plan on a laptop's AI can take a few seconds; past this, fill it in yourself.
+const PLAN_TIMEOUT_MS = 25 * 1000;
 
 // The phone's local time with its UTC offset, e.g. "2026-10-27T18:05:00-04:00".
 function localTimeWithOffset(date: Date): string {
@@ -170,23 +180,37 @@ function localTimeWithOffset(date: Date): string {
 
 /** "Dinner at Olive Garden, back by 11" -> destination and return time. Starts nothing. */
 export async function readPlan(text: string): Promise<ReadPlan> {
-  const result = await request<{
-    destination: string | null;
-    return_by: string | null;
-    problem: string | null;
-  }>('POST', '/v1/check-ins/plan', {
-    text,
-    now: localTimeWithOffset(new Date()),
-    time_zone: timeZone(),
-  });
+  const tooSlow = new Promise<null>((resolve) => setTimeout(() => resolve(null), PLAN_TIMEOUT_MS));
+  const result = await Promise.race([
+    request<{
+      destination: string | null;
+      return_by: string | null;
+      problem: string | null;
+      choices?: string[];
+    }>('POST', '/v1/check-ins/plan', {
+      text,
+      now: localTimeWithOffset(new Date()),
+      time_zone: timeZone(),
+    }),
+    tooSlow,
+  ]);
+  if (result === null) {
+    return { ok: false, error: 'That took too long. Fill it in below.' };
+  }
   if (!result.ok) {
     return {
       ok: false,
       error: result.status === 0 ? "Couldn't reach the server. Fill it in below." : result.error,
     };
   }
-  const { destination, return_by, problem } = result.data;
-  return { ok: true, destination, returnBy: return_by ? new Date(return_by) : null, problem };
+  const { destination, return_by, problem, choices = [] } = result.data;
+  return {
+    ok: true,
+    destination,
+    returnBy: return_by ? new Date(return_by) : null,
+    problem,
+    choices: choices.map((choice) => new Date(choice)),
+  };
 }
 
 /** Your last known location for this session (shared only if an alert triggers). */

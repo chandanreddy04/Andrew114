@@ -159,6 +159,28 @@ def test_time_the_ai_missed_comes_from_the_basic_reader(monkeypatch):
     assert plan.return_by == datetime(2026, 10, 27, 12, 0, tzinfo=NY)
 
 
+def test_ollama_made_up_place_and_am_pm_are_ignored(monkeypatch):
+    # The model answered a place from its prompt and an "am" the plan doesn't say.
+    ollama_answers(
+        monkeypatch,
+        {"destination": "Joe's Pizza", "back_by": "9:00am", "durations": [], "tomorrow": False},
+    )
+    plan = read("Walking around, back by 9 or so")
+    assert plan.destination is None
+    assert plan.return_by == datetime(2026, 10, 27, 21, 0, tzinfo=NY)
+
+
+def test_basic_time_wins_over_ollama(monkeypatch):
+    # "a few hours" is 3 hours; the model said 2.
+    ollama_answers(
+        monkeypatch,
+        {"destination": "the mall", "back_by": None, "durations": [120], "tomorrow": False},
+    )
+    plan = read("Shopping at the mall for a few hours")
+    assert plan.destination == "the mall"
+    assert plan.return_by == EVENING + timedelta(hours=3)
+
+
 def test_ollama_made_up_times_are_ignored(monkeypatch):
     # The model answered an hour and 9 pm, but the plan has neither.
     ollama_answers(
@@ -205,6 +227,151 @@ def test_plan_endpoint(client, user):
 
     # Nothing was started.
     assert client.get("/v1/history", headers=user["headers"]).json() == []
+    assert body["choices"] == []
+
+
+def test_plan_endpoint_offers_am_or_pm(client, user):
+    r = client.post(
+        "/v1/check-ins/plan",
+        json={
+            "text": "Coffee at Blue Bottle, back by 11",
+            "now": MORNING.isoformat(),
+            "time_zone": "America/New_York",
+        },
+        headers=user["headers"],
+    )
+    body = r.json()
+    assert body["return_by"] is None
+    assert body["problem"] == "Did you mean 11:00 AM or 11:00 PM?"
+    assert [datetime.fromisoformat(c) for c in body["choices"]] == [
+        datetime(2026, 10, 27, 11, 0, tzinfo=NY),
+        datetime(2026, 10, 27, 23, 0, tzinfo=NY),
+    ]
+
+
+# ----- AM or PM, time phrases, places -----
+
+MORNING = datetime(2026, 10, 27, 10, 30, tzinfo=NY)
+
+
+def test_am_or_pm_is_asked_when_both_are_likely():
+    plan = read("Coffee at Blue Bottle, back by 11", MORNING)
+    assert plan.return_by is None
+    assert plan.choices == [
+        datetime(2026, 10, 27, 11, 0, tzinfo=NY),
+        datetime(2026, 10, 27, 23, 0, tzinfo=NY),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("text", "now", "expected"),
+    [
+        # The activity says which half of the day.
+        ("Dinner, back by 11", MORNING, datetime(2026, 10, 27, 23, 0, tzinfo=NY)),
+        ("Party at Jess's, back around 1", EVENING, datetime(2026, 10, 28, 1, 0, tzinfo=NY)),
+        ("Brunch at Sarabeth's, back by 1", MORNING, datetime(2026, 10, 27, 13, 0, tzinfo=NY)),
+        ("Concert, back by 12", EVENING, datetime(2026, 10, 28, 0, 0, tzinfo=NY)),
+        # Only one is likely: 9 AM tomorrow is 15 hours away.
+        ("Walking to Sam's until 9", EVENING, datetime(2026, 10, 27, 21, 0, tzinfo=NY)),
+        # Tomorrow: 9 PM tomorrow is more than 24 hours away.
+        ("Grandma's tomorrow, back by 9", EVENING, datetime(2026, 10, 28, 9, 0, tzinfo=NY)),
+    ],
+)
+def test_am_or_pm_from_the_plan(text, now, expected):
+    plan = read(text, now)
+    assert plan.return_by == expected and plan.choices == []
+
+
+@pytest.mark.parametrize(
+    ("text", "minutes"),
+    [
+        ("Dinner, home ~quarter to 11", 280),
+        ("Study at the library until half past 9", 205),
+        ("Date night, home by 10ish", 235),
+        ("Out with friends for a couple of hours", 120),
+        ("Shopping for a few hours", 180),
+        ("Going to Brooklyn for 2-3 hours", 180),
+        ("At Mike's, back in an hour or two", 120),
+        ("Walking home from the bar, 20 min", 20),
+        ("Movie for two hours", 120),
+    ],
+)
+def test_time_phrases(text, minutes):
+    assert read(text).return_by == EVENING + timedelta(minutes=minutes)
+
+
+def test_dot_in_a_time():
+    # "11.30" is 11:30, not 11; "1.5 hours" is still a length.
+    plan = read("showup at store and be back by 11.30", MORNING)
+    assert plan.destination == "store"
+    assert plan.choices == [
+        datetime(2026, 10, 27, 11, 30, tzinfo=NY),
+        datetime(2026, 10, 27, 23, 30, tzinfo=NY),
+    ]
+    assert read("Gym for 1.5 hours").return_by == EVENING + timedelta(minutes=90)
+    assert read("Dinner, home by 10.15").return_by == datetime(2026, 10, 27, 22, 15, tzinfo=NY)
+
+
+def test_am_isnt_a_minute():
+    # "a m" in "2:30 am" used to be read as "a minute".
+    assert read("Late shift at work, back at 2:30 am").return_by == datetime(
+        2026, 10, 28, 2, 30, tzinfo=NY
+    )
+
+
+def test_not_a_real_time():
+    plan = read("Back by 9:75")
+    assert plan.return_by is None and plan.problem
+
+
+@pytest.mark.parametrize(
+    ("given", "expected"),
+    [
+        ("Dinner at Olive Garden on Main St", "Olive Garden on Main St"),
+        ("Coffee with Priya at Blue Bottle", "Blue Bottle"),
+        ("Bar crawl downtown, home", "Bar crawl downtown"),
+        ("Olive Garden, back by 11", "Olive Garden"),
+        ("The Home Depot", "The Home Depot"),
+        ("to the gym.", "the gym"),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_clean_place(given, expected):
+    assert plans._clean_place(given) == expected
+
+
+def test_claude_unclear_am_pm_is_asked(monkeypatch):
+    def fake_claude(text, now):
+        fields = {
+            "destination": "Blue Bottle",
+            "back_by_time": "11:00",
+            "am_pm_unclear": True,
+            "day": "today",
+            "minutes_from_now": None,
+        }
+        fields["other_time"] = plans._other_half(fields["back_by_time"])
+        return fields
+
+    monkeypatch.setattr(plans, "ask_claude", fake_claude)
+    plan = read("Coffee at Blue Bottle, back by 11", MORNING)
+    assert plan.source == "ai"
+    assert len(plan.choices) == 2
+
+
+def test_the_case_list_never_errs_early_with_the_basic_reader(monkeypatch):
+    """evals/plan_cases.py: the built-in reader must never give a too-early or made-up time."""
+    from evals.plan_cases import CASES
+    from evals.scoring import DANGEROUS, grade_time, read_case
+
+    monkeypatch.setattr(get_settings(), "ai_provider", "none")
+    grades = []
+    for now_text, text, _, expected in CASES:
+        now, plan = read_case(now_text, text)
+        grades.append(grade_time(plan, now, expected))
+    assert "crashed" not in grades
+    assert not DANGEROUS & set(grades)
+    assert grades.count("right") >= len(CASES) - 2
 
 
 def test_plan_endpoint_needs_login(client):

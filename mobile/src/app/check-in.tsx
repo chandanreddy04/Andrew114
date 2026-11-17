@@ -78,11 +78,14 @@ export default function CheckInScreen() {
   const [plan, setPlan] = useState('');
   const [reading, setReading] = useState(false);
   const [planNote, setPlanNote] = useState<{ text: string; problem: boolean } | null>(null);
+  // "11:00 AM or 11:00 PM?": the time could be either, so you pick.
+  const [timeChoices, setTimeChoices] = useState<Date[]>([]);
 
   async function fillFromPlan() {
     if (!plan.trim() || reading) return;
     setReading(true);
     setPlanNote(null);
+    setTimeChoices([]);
     const result = await readPlan(plan.trim());
     setReading(false);
     if (!result.ok) {
@@ -91,13 +94,28 @@ export default function CheckInScreen() {
     }
     if (result.destination) setDestination(result.destination);
     if (result.returnBy) setReturnBy(result.returnBy);
-    if (result.problem) {
+    if (result.choices.length > 0) {
+      setTimeChoices(result.choices);
+      setPlanNote({ text: 'When will you be back? Pick one:', problem: false });
+    } else if (result.problem) {
       setPlanNote({ text: result.problem, problem: true });
     } else if (!result.destination) {
       setPlanNote({ text: 'Time filled in below. Add where you’re going if you like.', problem: false });
     } else {
       setPlanNote({ text: 'Filled in below. Check it, then start your session.', problem: false });
     }
+  }
+
+  function pickTime(choice: Date) {
+    setReturnBy(choice);
+    setTimeChoices([]);
+    setPlanNote({ text: 'Filled in below. Check it, then start your session.', problem: false });
+  }
+
+  // "11:00 PM", or "Tomorrow 8:00 AM".
+  function choiceLabel(choice: Date) {
+    const tomorrow = choice.toDateString() !== new Date(now).toDateString();
+    return `${tomorrow ? 'Tomorrow ' : ''}${formatClock(choice)}`;
   }
 
   // The scroll-wheel time picker (opened by tapping the time).
@@ -235,6 +253,7 @@ export default function CheckInScreen() {
             onChangeText={(text) => {
               setPlan(text);
               setPlanNote(null);
+              setTimeChoices([]);
             }}
             placeholder="e.g. Dinner at Olive Garden on Main St, back by 11"
             placeholderTextColor={theme.textSecondary}
@@ -259,12 +278,33 @@ export default function CheckInScreen() {
             </ThemedText>
           </Pressable>
         </View>
+        {reading && (
+          <ThemedText type="small" style={{ color: theme.textSecondary }}>
+            Reading your plan… this can take a few seconds.
+          </ThemedText>
+        )}
         {planNote && (
           <ThemedText
             type="small"
             style={{ color: planNote.problem ? Brand.red : theme.textSecondary }}>
             {planNote.text}
           </ThemedText>
+        )}
+        {timeChoices.length > 0 && (
+          <View style={styles.choiceRow}>
+            {timeChoices.map((choice) => (
+              <Pressable
+                key={choice.getTime()}
+                onPress={() => pickTime(choice)}
+                accessibilityRole="button"
+                accessibilityLabel={`Be back by ${choiceLabel(choice)}`}
+                style={[styles.choice, { borderColor: Brand.green }]}>
+                <ThemedText type="smallBold" style={{ color: Brand.green }}>
+                  {choiceLabel(choice)}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
         )}
       </View>
 
@@ -472,6 +512,17 @@ const styles = StyleSheet.create({
     backgroundColor: Brand.green,
     borderRadius: 999,
     paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  choice: {
+    borderRadius: 999,
+    borderWidth: 1.5,
+    paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.two,
   },
   inputPill: {

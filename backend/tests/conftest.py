@@ -14,6 +14,9 @@ os.environ.update(
     TEST_PHONE_NUMBERS="+15550001111=123456,+15550002222=654321",
     BUGSNAG_API_KEY="",
     TWILIO_TRIAL_TEMPLATE="",
+    # Never call a real AI from tests: Claude without a key is skipped.
+    AI_PROVIDER="claude",
+    ANTHROPIC_API_KEY="",
 )
 
 import fakeredis  # noqa: E402

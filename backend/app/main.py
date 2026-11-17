@@ -13,11 +13,13 @@ Docs:         http://localhost:8000/docs
 """
 
 import logging
+import threading
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from app import plans
 from app.cache import get_redis
 from app.config import get_settings
 from app.db import engine
@@ -52,6 +54,10 @@ if bugsnag_enabled():
 
 for router in (auth, me, contacts, check_ins, sos, history, client_errors, share):
     app.include_router(router.router)
+
+if settings.ai_provider.strip().lower() == "ollama":
+    # Load the local AI model in the background, so the first plan isn't slow.
+    threading.Thread(target=plans.warm_up_ollama, daemon=True).start()
 
 
 @app.get("/", tags=["health"])
