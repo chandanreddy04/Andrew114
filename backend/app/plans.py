@@ -35,7 +35,7 @@ LATEST = timedelta(hours=24)
 # "Back by 11" with no am/pm: an 11 o'clock more than this far away is
 # unlikely to be the one meant, so only the nearer one is used.
 LIKELY = timedelta(hours=13)
-TIME_FIELDS = ("back_by_time", "other_time", "minutes_from_now", "day")
+TIME_FIELDS = ("back_by_time", "other_time", "clock_is_start", "minutes_from_now", "day")
 
 
 @dataclass
@@ -76,13 +76,27 @@ def _zone(name: str | None, now: datetime) -> tzinfo:
 def _return_time(fields: dict, now: datetime) -> tuple[datetime | None, str | None, list[datetime]]:
     """The return time (or two to pick from), between 5 min and 24 h ahead."""
     minutes = fields.get("minutes_from_now")
+    clocks = [fields.get("back_by_time"), fields.get("other_time")]
+    at_clock = [when for clock in clocks if (when := _when(clock, fields, now))]
     if isinstance(minutes, int | float) and minutes > 0:
-        found = [now + timedelta(minutes=minutes)]
+        length = timedelta(minutes=minutes)
+        if at_clock and fields.get("clock_is_start"):
+            # "Lunch at 12:30 for an hour" (said at 12:45) started earlier today.
+            starts = [
+                s - timedelta(days=1) if s - now > timedelta(hours=18) else s for s in at_clock
+            ]
+            found = [start + length for start in starts]
+        elif at_clock and at_clock[0] >= now + length:
+            # "mall for 3 hours, back by 5" (at noon): the later one, 5 PM.
+            found = [when for when in at_clock if when >= now + length]
+        else:
+            # "mall for 3 hours, back by 3" (at 2 PM): 3 PM is too early, and
+            # 3 AM isn't what's meant, so the 3 hours count: 5 PM.
+            found = [now + length]
+    elif at_clock:
+        found = at_clock
     else:
-        clocks = [fields.get("back_by_time"), fields.get("other_time")]
-        found = [when for clock in clocks if (when := _when(clock, fields, now))]
-        if not found:
-            return None, "Add when you'll be back, e.g. “back by 11 pm”.", []
+        return None, "Add when you'll be back, e.g. “back by 11 pm”.", []
 
     found = [when.replace(second=0, microsecond=0) for when in found]
     usable = sorted(when for when in found if EARLIEST <= when - now <= LATEST)
@@ -119,7 +133,9 @@ def _clean_place(place) -> str | None:
     """'Dinner at Olive Garden on Main St' -> 'Olive Garden on Main St'."""
     if not isinstance(place, str):
         return None
-    place = place.strip().strip("\"'“”.,;!").strip()
+    # No emoji or symbols ("joes 🍕" -> "joes").
+    place = re.sub(r"[^\w\s'’&.,/#()\-]", " ", place)
+    place = re.sub(r"\s+", " ", place).strip().strip("\"'“”.,;!").strip()
     # Leave out the activity before the place ("Dinner at", "Heading to").
     activity = re.match(r"(?:\S+\s+){0,3}?\S+\s+(?:at|to|@)\s+(?!\d)(.+)$", place, re.I)
     if activity:
@@ -331,6 +347,9 @@ def _from_parts(parts: dict, text: str, now: datetime) -> dict:
     destination = _clean_place(parts.get("destination"))
     if destination and destination.lower().removeprefix("the ") not in text.lower():
         destination = None
+    # The same tidying as the built-in reader: "bar w frnds" -> "bar", and
+    # "home", "back" or "Movies with friends" -> no place.
+    destination = _place_without_at(destination) if destination else None
     fields: dict = {
         "destination": destination,
         "back_by_time": None,
@@ -364,19 +383,107 @@ def _from_parts(parts: dict, text: str, now: datetime) -> dict:
 _NUMBER_WORDS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
     "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "fifteen": 15,
-    "twenty": 20, "thirty": 30, "forty": 40, "forty-five": 45, "ninety": 90,
+    "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "ninety": 90,
 }  # fmt: skip
+_TENS = "twenty|thirty|forty|fifty"
+_ONES = "one|two|three|four|five|six|seven|eight|nine"
 _UNIT = r"(?:hours?|hrs?|minutes?|mins?)"
+_HOUR_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+}  # fmt: skip
+_MINUTE_WORDS = {
+    "o'clock": 0, "oclock": 0, "oh five": 5, "o five": 5, "ten": 10, "fifteen": 15,
+    "twenty": 20, "twenty five": 25, "thirty": 30, "forty": 40, "forty five": 45,
+    "fifty": 50, "fifty five": 55,
+}  # fmt: skip
 
 
 def _plain(text: str) -> str:
     """Rewrite common ways of saying a time into digits, so the patterns below read them."""
     text = re.sub(r"~\s*", "around ", text)
-    text = re.sub(r"\s@\s", " at ", text)
-    text = re.sub(r"\b(?:2nite|tonite)\b", "tonight", text, flags=re.I)
-    text = re.sub(r"\bbk\b", "back", text, flags=re.I)
-    # "11.30" is 11:30 (but "1.25 hours" is a length).
-    text = re.sub(rf"\b(\d{{1,2}})\.([0-5]\d)\b(?!\s*{_UNIT}\b)", r"\1:\2", text, flags=re.I)
+    text = re.sub(r"(^|\s)@\s*(?=\w)", r"\1at ", text)  # "@chipotle"
+    # Short and misspelled words typed fast.
+    for pattern, word in (
+        (r"2nite|tonite", "tonight"),
+        (r"nite", "night"),
+        (r"bk|bck|bak", "back"),
+        (r"hme|hom", "home"),
+        (r"2morrow|2moro|tmrw|tmr|tmw|tomoro|tomorow|tommorow|tommorrow", "tomorrow"),
+        (r"hrz", "hrs"),
+        (r"teh", "the"),
+        (r"bakc|bcak", "back"),
+        (r"hoem", "home"),
+    ):
+        text = re.sub(rf"\b(?:{pattern})\b", word, text, flags=re.I)
+    # "before 6" and "no later than 9pm" are "by".
+    text = re.sub(
+        r"\b(?:no\s+later\s+than|not\s+later\s+than|latest\s+by|before)(?=\s+(?:\d|noon|midnight|"
+        r"one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b)",
+        "by",
+        text,
+        flags=re.I,
+    )
+    # Said out loud (voice typing): "seven p m", "by eleven thirty", "half past eight".
+    text = re.sub(r"\b([ap])\.?\s+m\b\.?", r"\1m", text, flags=re.I)
+    hours = "|".join(_HOUR_WORDS)
+    minutes = "|".join(
+        word.replace(" ", r"[\s-]+") for word in sorted(_MINUTE_WORDS, key=len, reverse=True)
+    )
+    text = re.sub(
+        rf"\b(by|at|until|till|til|around|past|to)\s+({hours})(?:[\s-]+({minutes}))?\b"
+        rf"(?!\s+of\b)(?!\s*{_UNIT}\b)",
+        lambda m: (
+            f"{m.group(1)} {_HOUR_WORDS[m.group(2).lower()]}"
+            + (f":{_MINUTE_WORDS[_words(m.group(3))]:02d}" if m.group(3) else "")
+        ),
+        text,
+        flags=re.I,
+    )
+    # Halves: "1/2 hour", "half hr", "hour and half".
+    text = re.sub(r"\b1/2\s*(?=(?:an?\s+)?(?:hours?|hrs?)\b)", "half ", text, flags=re.I)
+    text = re.sub(r"\bhalf\s+(?:an?\s+)?(?=(?:hours?|hrs?)\b)", "half an ", text, flags=re.I)
+    text = re.sub(r"\b(hours?|hrs?)\s+and\s+half\b", r"\1 and a half", text, flags=re.I)
+    text = re.sub(
+        r"(?<![\d.]\s)\b(?:an?\s+)?(hour|hr)\s+and\s+a\s+half\b",
+        "an hour and a half",
+        text,
+        flags=re.I,
+    )
+    # Times typed fast: "7:3o" (letter o), "11.30", "11,30" and "2.30pm" are
+    # 7:30, 11:30 and 2:30pm (but "1.25 hours" is a length, and "11, 30 min"
+    # has a space).
+    text = re.sub(
+        r"\b(\d{1,2}):([0-5oO])([\doO])\b",
+        lambda m: f"{m.group(1)}:{m.group(2)}{m.group(3)}".replace("o", "0").replace("O", "0"),
+        text,
+    )
+    text = re.sub(rf"\b(\d{{1,2}})[.,;]([0-5]\d)(?!\d)(?!\s*{_UNIT}\b)", r"\1:\2", text, flags=re.I)
+    # "1h30" is an hour and a half.
+    text = re.sub(r"\b(\d{1,2})\s*h\s*([0-5]\d)\b", r"\1 hours \2 minutes", text, flags=re.I)
+
+    # "back in 20" is 20 minutes; "back in 2" could be hours, so it's left to ask.
+    def in_minutes(match: re.Match) -> str:
+        number = int(match.group(2))
+        return f"{match.group(1)} {number} minutes" if 10 <= number <= 180 else match.group(0)
+
+    text = re.sub(
+        rf"\b(in|another|plus)\s+(\d{{2,3}})\b(?!\s*(?:[:.,]\d|am|pm|a\.m|p\.m|{_UNIT}\b))",
+        in_minutes,
+        text,
+        flags=re.I,
+    )
+    # "11p", "1130pm", "by 1130" and "by 9 30" are 11pm, 11:30pm, 11:30 and 9:30.
+    text = re.sub(r"\b(\d{1,4}(?::\d{2})?)([ap])\b(?!\.)", r"\1\2m", text, flags=re.I)
+    text = re.sub(r"\b(\d{1,2})([0-5]\d)\s*(am|pm|a\.m\.|p\.m\.)", r"\1:\2\3", text, flags=re.I)
+    text = re.sub(
+        # ...but not "at 123 Main St".
+        rf"\b(by|at|until|till|til|around)\s+(\d{{1,2}})(?:\s+)?([0-5]\d)\b(?!:)(?!\s*{_UNIT}\b)"
+        rf"(?!{_STREET})",
+        r"\1 \2:\3",
+        text,
+        flags=re.I,
+    )
     text = re.sub(r"\b(\d{1,2}(?::\d{2})?)\s*-?ish\b", r"\1", text, flags=re.I)
     text = re.sub(r"\b(\d{1,2})\s*o'?clock\b", r"\1", text, flags=re.I)
 
@@ -390,10 +497,15 @@ def _plain(text: str) -> str:
     text = re.sub(r"\b(?:a\s+)?quarter\s+(?:past|after)\s+(\d{1,2})\b", r"\1:15", text, flags=re.I)
     text = re.sub(r"\bhalf\s+past\s+(\d{1,2})\b", r"\1:30", text, flags=re.I)
     # Lengths: the longer reading of a range is the safer one ("2-3 hours" is 3).
+    # "forty five minutes" is 45, not 5.
     words = "|".join(sorted(_NUMBER_WORDS, key=len, reverse=True))
     text = re.sub(
-        rf"\b({words})(?=\s+{_UNIT}\b)",
-        lambda m: str(_NUMBER_WORDS[m.group(1).lower()]),
+        rf"\b(?:({_TENS})[\s-]+({_ONES})|({words}))(?=\s+{_UNIT}\b)",
+        lambda m: str(
+            _NUMBER_WORDS[m.group(1).lower()] + _NUMBER_WORDS[m.group(2).lower()]
+            if m.group(1)
+            else _NUMBER_WORDS[m.group(3).lower()]
+        ),
         text,
         flags=re.I,
     )
@@ -403,7 +515,24 @@ def _plain(text: str) -> str:
     text = re.sub(
         rf"\b\d+(?:\.\d+)?\s*(?:-|to|or)\s*(\d+(?:\.\d+)?)(?=\s*{_UNIT}\b)", r"\1", text, flags=re.I
     )
+
+    # Times too: "back by 8 or 9" and "by 5, maybe 6" are 9 and 6, so the
+    # Circle isn't alerted while you're still out.
+    def later(match: re.Match) -> str:
+        return match.group(3) + (match.group(4) or match.group(2) or "")
+
+    text = re.sub(
+        r"\b(\d{1,2}(?::\d{2})?)\s*(am|pm)?\s*,?\s*(?:or(?:\s+maybe)?|maybe|possibly|-|to)\s+"
+        rf"(\d{{1,2}}(?::\d{{2}})?)\s*(am|pm)?\b(?!\s*(?:{_UNIT}|h|m)\b)",
+        later,
+        text,
+        flags=re.I,
+    )
     return text
+
+
+def _words(text: str) -> str:
+    return re.sub(r"[\s-]+", " ", text.lower())
 
 
 _RELATIVE = re.compile(
@@ -420,10 +549,19 @@ _CLOCK = re.compile(
     re.I,
 )
 _WORDS = {"noon": "12:00", "midnight": "00:00"}
+# A full stop, but not the one in "Dr. Smith's" or "St. Patrick's".
+_STOP = r"(?<!\bdr)(?<!\bst)(?<!\bmt)(?<!\bmr)(?<!\bms)(?<!\bjr)(?<!\bsr)(?<!\bave)(?<!\bmrs)\."
+# "123 Main Street": a number that starts an address, not a time.
+_STREET = (
+    r"\s+(?:[a-z0-9']+\s+){0,3}?(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|"
+    r"drive|dr|place|pl|way|court|ct)\b"
+)
+_ADDRESS = rf"\d{{1,5}}{_STREET}"
 _PLACE = re.compile(
-    r"\b(?:to|at)\s+(?!\d|noon\b|midnight\b)(?:(?-i:the)\s+)?"
-    r"(.+?)(?=\s*[,.;!]|\s+(?:and\s+)?(?:be\s+)?(?:back|home|by|until|till|til|for|around|in\s+\d|"
-    r"tonight|tomorrow|today|then)\b|$)",
+    # Not a time ("at 5"), unless it's an address ("at 123 Main St").
+    rf"\b(?:to|at)\s+(?!(?!{_ADDRESS})\d|noon\b|midnight\b)(?:(?-i:the)\s+)?"
+    rf"(.+?)(?=\s*(?:[,;!]|{_STOP})|\s+(?:and\s+)?(?:be\s+)?(?:back|home|by|until|till|til|for|"
+    r"around|in\s+\d|tonight|tomorrow|today|then)\b|$)",
     re.I,
 )
 
@@ -450,8 +588,22 @@ def read_basic(text: str, now: datetime) -> dict:
             total += number * (60 if unit.startswith("h") else 1)
         fields["minutes_from_now"] = round(total)
 
-    clock = _CLOCK.search(text)
-    if clock and not relative:
+    # "Picking up Mia at 3, home by 3:45": the time you're back is the one
+    # after back/home/until; otherwise the last time given.
+    clocks = list(_CLOCK.finditer(text))
+    returning = [c for c in clocks if re.match(r"(?:back|home|until|till|til)\b", c[0], re.I)]
+    clock = (returning or clocks or [None])[-1]
+    # "back by 11pm or 11:30pm": the later one, so the Circle isn't alerted early.
+    for later in clocks:
+        if clock and later.start() > clock.end():
+            if re.fullmatch(r"\s*(?:or|-|to)\s*", text[clock.end() : later.start()], re.I):
+                clock = later
+    if clock:
+        # With a length too, "at 3" is when it starts ("at 3, back in 30 min"
+        # is 3:30); "back by 5" is still a time to be back by.
+        fields["clock_is_start"] = relative and not re.match(
+            r"(?:back|home|until|till|til|by)\b", clock[0], re.I
+        )
         fields["back_by_time"], fields["other_time"] = _clock(
             clock.group(1) or clock.group(4),
             clock.group(2) or clock.group(5),
@@ -460,15 +612,74 @@ def read_basic(text: str, now: datetime) -> dict:
             text,
             fields["day"] == "tomorrow",
         )
-    elif not relative:
+    else:
         word = re.search(r"\b(noon|midnight)\b", text, re.I)
         if word:
             fields["back_by_time"] = _WORDS[word.group(1).lower()]
 
     place = _PLACE.search(text)
-    if place:
-        fields["destination"] = place.group(1).strip()
+    fields["destination"] = place.group(1).strip() if place else _place_without_at(text)
     return fields
+
+
+# Words for what you're doing rather than where ("dinner", "walking"), left
+# out when the place has no "at"/"to" before it ("movie amc til 11" -> "amc").
+_ACTIVITY = (
+    r"i'?m|i\s+am|i'?ll\s+be|going|goin|gng|heading|headed|off|out|hanging\s+out|"
+    r"walking\s+the\s+dog|walking|walk|running|run|jogging|jog|hiking|hike|visiting|"
+    r"visit|seeing|getting|grabbing|having|showup|show\s+up|meeting|meet|dinner|lunch|"
+    r"brunch|breakfast|coffee|drinks|date\s+night|date|party|movies?|concert|shopping|"
+    r"grocery\s+run|groceries|grocerys|grocery|errands|road\s+trip|trip|late|then|and|"
+    r"studying|study|taking|take|picking\s+up|pick\s+up|dropping\s+off|not|should|would|will|"
+    r"gonna|probably|prob|maybe|call|text|back|be|a|an|my|some"
+)
+# How you get there, or who, not where you're going ("taking an uber home").
+_NOT_PLACES = {
+    "uber", "lyft", "taxi", "cab", "bus", "train", "subway", "car", "ride", "drive",
+    "me", "you", "us", "them", "him", "her", "it",
+}  # fmt: skip
+# When, not where: "back later", "home this evening", "back after work".
+_VAGUE = re.compile(r"(?:later|soon|after|before|this|tonight|in\s+a\s+bit|a\s+bit)\b", re.I)
+# Where the place ends: punctuation, the time, a length, or who you're with.
+# "back"/"home" only when the time follows, so "The Home Depot" stays whole.
+# A number ends it only when it's a time or a length ("walmart 45min"), not
+# a name ("JFK Terminal 4", "42nd St").
+_PLACE_END = re.compile(
+    rf"[,;!(]|{_STOP}|\s(?:and\s+)?(?:be\s+)?(?:back|home)(?=\s+(?:by|at|around|in|for|until|"
+    r"till|til|tonight|tomorrow|\d)\b|\s*$)|\s(?:by|until|till|til|for|around|then|tonight|"
+    r"tomorrow|today)\b|\s(?:in|at)\s+(?:\d|an?\s|half\s)|\s(?:w/?|with)\s"
+    r"|\s(?=\d+(?:[.:]\d+)?\s*(?:hours?|hrs?|h|minutes?|mins?|m|am|pm|a\.m|p\.m)\b)"
+    r"|\s4\s+(?=an?\s|\d)",  # "starbucks 4 an hr"
+    re.I,
+)
+
+
+def _place_without_at(text: str) -> str | None:
+    """'gym back by 1pm' -> 'gym'; 'bar w frnds til 1am' -> 'bar'; 'dinner, back by 10' -> None."""
+    place = _PLACE_END.split(" " + text, maxsplit=1)[0].strip()
+    # "Picking up Mia from school" -> "school".
+    place = re.sub(
+        r"^(?:picking|pick|dropping|drop)\s+\S+\s+.*?\b(?:from|at|off\s+at)\s+",
+        "",
+        place,
+        flags=re.I,
+    )
+    while True:
+        shorter = re.sub(rf"^(?:{_ACTIVITY})\b\s*", "", place, flags=re.I)
+        if shorter == place:
+            break
+        place = shorter
+    place = re.sub(r"^(?:over\s+)?(?:in|to|at|near|around|from)\s+", "", place, flags=re.I)
+    if (
+        not place
+        or len(place.split()) > 5
+        or place.lower() in _NOT_PLACES
+        or _VAGUE.match(place)
+        # Going home ("home this evening"), but "Home Depot" is a place.
+        or re.match(r"(?i:home)\b(?!\s+[A-Z])", place)
+    ):
+        return None
+    return place
 
 
 # Words that say whether a time with no am/pm is at night or during the day.

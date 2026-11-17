@@ -25,7 +25,7 @@ def read(text: str, now: datetime = EVENING) -> plans.Plan:
         ("Date at Olive Garden on Main St, back by 11", "Olive Garden on Main St", "23:00"),
         ("Heading to the gym, home by 7:30pm", "gym", "19:30"),
         ("Walking to Sam's house until 9", "Sam's house", "21:00"),
-        ("Run in the park for 45 min", None, "18:50"),
+        ("Run in the park for 45 min", "the park", "18:50"),
         ("Drinks at The Anchor for 2 hours", "The Anchor", "20:05"),
         ("Movie at AMC, back at midnight", "AMC", "00:00"),
     ],
@@ -168,6 +168,23 @@ def test_ollama_made_up_place_and_am_pm_are_ignored(monkeypatch):
     plan = read("Walking around, back by 9 or so")
     assert plan.destination is None
     assert plan.return_by == datetime(2026, 10, 27, 21, 0, tzinfo=NY)
+
+
+@pytest.mark.parametrize(
+    ("text", "model_place", "place"),
+    [
+        ("bar w frnds til 1am", "bar w frnds", "bar"),
+        ("Movies with friends tonight, back by 11", "Movies with friends tonight", None),
+        ("back home by 5", "back", None),
+        ("Night shift at the hospital, home by 7am", "home", "hospital"),
+    ],
+)
+def test_ollama_place_is_tidied(monkeypatch, text, model_place, place):
+    ollama_answers(
+        monkeypatch,
+        {"destination": model_place, "back_by": None, "durations": [], "tomorrow": False},
+    )
+    assert read(text).destination == place
 
 
 def test_basic_time_wins_over_ollama(monkeypatch):
@@ -339,6 +356,28 @@ def test_not_a_real_time():
 )
 def test_clean_place(given, expected):
     assert plans._clean_place(given) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "place"),
+    [
+        ("gym bck by 1pm", "gym"),
+        ("movie amc til 11pm", "amc"),
+        ("bar w frnds til 1am", "bar"),
+        ("walmart 45min", "walmart"),
+        ("Jog in Central Park, back at 11:15", "Central Park"),
+        ("Picking up Mia from school at 3, home by 3:45", "school"),
+        ("The Home Depot for an hour", "The Home Depot"),
+        # No place: only what you're doing, how you get there, or going home.
+        ("Dinner then movie, home by 11:30", None),
+        ("Taking an uber home in 30 min", None),
+        ("Walking home from the bar, 20 min", None),
+        ("back home by 5", None),
+        ("back in 2 min", None),
+    ],
+)
+def test_place_without_at_or_to(text, place):
+    assert read(text).destination == place
 
 
 def test_claude_unclear_am_pm_is_asked(monkeypatch):
